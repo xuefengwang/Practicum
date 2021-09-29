@@ -14,7 +14,6 @@ def next_pcap_file():
   for p in paths:
     if os.path.isfile(p):
       return p
-    
 
 def parse_packet(pkt):
   print(pkt.summary())
