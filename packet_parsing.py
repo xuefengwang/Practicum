@@ -3,13 +3,16 @@ from scapy.all import *
 import os
 from pathlib import Path
 import mysql.connector
+import configparser
+
 
 HOME = str(Path.home())
 PCAP_FOLDER = "wlan0_pcap"
-db_conn
-
-def connect_db():
-  
+config = configparser.ConfigParser()
+config.read("packet_parsing.ini")
+db_config = dict(config.items('Database'))
+db_conn = mysql.connector.connect(**db_config)
+print(f"db conn {db_conn.connection_id}") 
 
 # The captured pcap files are located at $HOME/wlan0_pcap folder. 
 # Any file in that folder is assumed to have not been processed. 
@@ -31,4 +34,4 @@ pcap_file = next_pcap_file()
 print(f"processing {pcap_file}")
 sniff(count=10, offline=str(pcap_file), prn=parse_packet, store=0)
 
-clean_up(pcap_file)
+# clean_up(pcap_file)
