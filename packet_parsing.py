@@ -8,8 +8,8 @@ from datetime import datetime
 load_layer("http")
 
 HOME = str(Path.home())
-# PCAP_FOLDER = "wlan0_pcap"
-PCAP_FOLDER = "Downloads/pcaps"
+PCAP_FOLDER = "wlan0_pcap/test"
+# PCAP_FOLDER = "Downloads/pcaps"
 db_conn = None
 
 class DbPacket:
@@ -46,10 +46,11 @@ def next_pcap_file():
       return p
 
 def parse_pkt(pkt):      
-  db_pkt = DbPacket()
+  db_pkt = None
   print(pkt.summary())
   if pkt.haslayer(DNS):
     # print(f"DNS: {pkt[DNS].show()}")
+    db_pkt = DbPacket()
     db_pkt.atime = datetime.utcfromtimestamp(int(pkt.time)).strftime('%Y-%m-%d %H:%M:%S')  # arrival time
     db_pkt.protocol = "DNS"
     db_pkt.src_ip = pkt[IP].src
@@ -78,18 +79,24 @@ def parse_pkt(pkt):
   elif pkt.haslayer(ICMP):
     print("ICMP")
   else:
-    print(f"Another protocol: {pkt.show()}")
+    # print(f"Another protocol: {pkt.show()}")
+    pass
   return db_pkt
 
 def add_pkt_to_db(db_pkt: DbPacket):
+  if db_pkt == None:
+    return
   db_cursor = db_conn.cursor()
   insert_stmt = (
     "INSERT INTO packet (packet_time, protocol, src_ip, src_mac, dst_ip, dst_mac, size, payload) " 
-    "VALUES (%s, %s, %s, %s, %s, %s, %d, %s)"
+    "VALUES (%s, %s, %s, %s, %s, %s, %s, %s)"
   )
   data = (db_pkt.atime, db_pkt.protocol, db_pkt.src_ip, db_pkt.src_mac, db_pkt.dst_ip, db_pkt.dst_mac, db_pkt.size, db_pkt.payload)
   result = db_cursor.execute(insert_stmt, data)
-  print(f"db result {result}")
+  print(f"db result {result}, {db_cursor.lastrowid}")
+  db_conn.commit()
+
+
 
 def process_pkt(pkt):
   db_pkt = parse_pkt(pkt)
@@ -98,10 +105,10 @@ def process_pkt(pkt):
 def clean_up(pcap_file):
   os.rename(pcap_file, os.path.join(HOME, PCAP_FOLDER, "processed", pcap_file.name))
 
-# setup()
+setup()
 pcap_file = next_pcap_file()
 
 print(f"processing {pcap_file}")
-sniff(count=12, offline=str(pcap_file), prn=process_pkt, store=0)
+sniff(count=1200, offline=str(pcap_file), prn=process_pkt, store=0)
 
 # clean_up(pcap_file)
