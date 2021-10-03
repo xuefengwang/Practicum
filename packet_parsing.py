@@ -8,11 +8,15 @@ from datetime import datetime
 load_layer("http")
 
 HOME = str(Path.home())
-PCAP_FOLDER = "wlan0_pcap/test"
+PCAP_FOLDER = "wlan0_pcap"
 # PCAP_FOLDER = "Downloads/pcaps"
 db_conn = None
 
 class DbPacket:
+  def __init__(self):
+    self.payload = None
+    self.src_port = None
+    self.dst_port = None
   atime: str
   protocol: str
   src_ip: str
@@ -45,10 +49,10 @@ def next_pcap_file():
     if os.path.isfile(p):
       return p
 
-def create_pkt(pkt):
+def create_pkt(pkt, protocol):
   db_pkt = DbPacket()
   db_pkt.atime = datetime.utcfromtimestamp(int(pkt.time)).strftime('%Y-%m-%d %H:%M:%S')  # arrival time
-  db_pkt.protocol = "DNS"
+  db_pkt.protocol = protocol
   db_pkt.src_ip = pkt[IP].src
   db_pkt.src_mac = pkt[Ether].src
   db_pkt.dst_ip = pkt[IP].dst
@@ -61,7 +65,7 @@ def parse_pkt(pkt):
   print(pkt.summary())
   if pkt.haslayer(DNS):
     # print(f"DNS: {pkt[DNS].show()}")
-    db_pkt = create_pkt(pkt)
+    db_pkt = create_pkt(pkt, 'DNS')
     dns = pkt[DNS]
     if dns.qr == 1:       # DNS answer
       payload = ""
@@ -77,21 +81,26 @@ def parse_pkt(pkt):
     print(f"ARP: passed")
     pass
   elif pkt.haslayer(TCP):
-    print("TCP/UDP")
-    db_pkt = create_pkt(pkt)
+    print("TCP")
+    protocol = "TCP"
+    if pkt[TCP].sport == 443 or pkt[TCP].dport == 443:
+      protocol = "TLS"
+    db_pkt = create_pkt(pkt, protocol)
     db_pkt.src_port = pkt[TCP].sport
     db_pkt.dst_port = pkt[TCP].dport
-    db_pkt.payload = pkt[Raw].load
+    if pkt.haslayer(Raw):
+      db_pkt.payload = str(pkt[Raw].load)[:1023]
   elif pkt.haslayer(HTTP):
     print("HTTP")
   elif pkt.haslayer(ICMP):
     print("ICMP")
   elif pkt.haslayer(UDP):
     print("UDP")
-    db_pkt = create_pkt(pkt)
+    db_pkt = create_pkt(pkt, 'UDP')
     db_pkt.src_port = pkt[UDP].sport
     db_pkt.dst_port = pkt[UDP].dport
-    db_pkt.payload = pkt[Raw].load
+    if pkt.haslayer(Raw):
+      db_pkt.payload = str(pkt[Raw].load)
   else:
     # print(f"Another protocol: {pkt.show()}")
     pass
@@ -102,15 +111,13 @@ def add_pkt_to_db(db_pkt: DbPacket):
     return
   db_cursor = db_conn.cursor()
   insert_stmt = (
-    "INSERT INTO packet (packet_time, protocol, src_ip, src_mac, dst_ip, dst_mac, size, payload) " 
-    "VALUES (%s, %s, %s, %s, %s, %s, %s, %s)"
+    "INSERT INTO packet (packet_time, protocol, src_ip, src_port, src_mac, dst_ip, dst_port, dst_mac, size, payload) " 
+    "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)"
   )
-  data = (db_pkt.atime, db_pkt.protocol, db_pkt.src_ip, db_pkt.src_mac, db_pkt.dst_ip, db_pkt.dst_mac, db_pkt.size, db_pkt.payload)
+  data = (db_pkt.atime, db_pkt.protocol, db_pkt.src_ip, db_pkt.src_port, db_pkt.src_mac, db_pkt.dst_ip, db_pkt.dst_port, db_pkt.dst_mac, db_pkt.size, db_pkt.payload)
   result = db_cursor.execute(insert_stmt, data)
   print(f"db result {result}, {db_cursor.lastrowid}")
   db_conn.commit()
-
-
 
 def process_pkt(pkt):
   db_pkt = parse_pkt(pkt)
@@ -123,6 +130,6 @@ setup()
 pcap_file = next_pcap_file()
 
 print(f"processing {pcap_file}")
-sniff(count=1200, offline=str(pcap_file), prn=process_pkt, store=0)
+sniff(offline=str(pcap_file), prn=process_pkt, store=0)
 
-# clean_up(pcap_file)
+clean_up(pcap_file)
