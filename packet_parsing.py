@@ -12,6 +12,7 @@ PCAP_FOLDER = "wlan0_pcap"
 # PCAP_FOLDER = "Downloads/pcaps"
 db_conn = None
 
+
 class DbPacket:
   def __init__(self):
     self.payload = None
@@ -38,10 +39,10 @@ def setup():
   config.read("packet_parsing.ini")
   db_config = dict(config.items('Database'))
   db_conn = mysql.connector.connect(**db_config)
-  print(f"db conn: {db_conn.connection_id}") 
+  print(f"db conn: {db_conn.connection_id}")
 
-# The captured pcap files are located at $HOME/wlan0_pcap folder. 
-# Any file in that folder is assumed to have not been processed. 
+# The captured pcap files are located at $HOME/wlan0_pcap folder.
+# Any file in that folder is assumed to have not been processed.
 def next_pcap_file():
   dir = os.path.join(HOME, PCAP_FOLDER)
   paths = sorted(Path(dir).iterdir(), key=os.path.getmtime)
@@ -49,9 +50,11 @@ def next_pcap_file():
     if os.path.isfile(p):
       return p
 
+
 def create_pkt(pkt, protocol):
   db_pkt = DbPacket()
-  db_pkt.atime = datetime.utcfromtimestamp(int(pkt.time)).strftime('%Y-%m-%d %H:%M:%S')  # arrival time
+  db_pkt.atime = datetime.utcfromtimestamp(
+      int(pkt.time)).strftime('%Y-%m-%d %H:%M:%S')  # arrival time
   db_pkt.protocol = protocol
   db_pkt.src_ip = pkt[IP].src
   db_pkt.src_mac = pkt[Ether].src
@@ -60,7 +63,8 @@ def create_pkt(pkt, protocol):
   db_pkt.size = pkt.len
   return db_pkt
 
-def parse_pkt(pkt):      
+
+def parse_pkt(pkt):
   db_pkt = None
   print(pkt.summary())
   if pkt.haslayer(DNS):
@@ -106,25 +110,31 @@ def parse_pkt(pkt):
     pass
   return db_pkt
 
+
 def add_pkt_to_db(db_pkt: DbPacket):
   if db_pkt == None:
     return
   db_cursor = db_conn.cursor()
   insert_stmt = (
-    "INSERT INTO packet (packet_time, protocol, src_ip, src_port, src_mac, dst_ip, dst_port, dst_mac, size, payload) " 
-    "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)"
+      "INSERT INTO packet (packet_time, protocol, src_ip, src_port, src_mac, dst_ip, dst_port, dst_mac, size, payload) "
+      "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)"
   )
-  data = (db_pkt.atime, db_pkt.protocol, db_pkt.src_ip, db_pkt.src_port, db_pkt.src_mac, db_pkt.dst_ip, db_pkt.dst_port, db_pkt.dst_mac, db_pkt.size, db_pkt.payload)
+  data = (db_pkt.atime, db_pkt.protocol, db_pkt.src_ip, db_pkt.src_port, db_pkt.src_mac,
+          db_pkt.dst_ip, db_pkt.dst_port, db_pkt.dst_mac, db_pkt.size, db_pkt.payload)
   result = db_cursor.execute(insert_stmt, data)
   print(f"db result {result}, {db_cursor.lastrowid}")
   db_conn.commit()
+
 
 def process_pkt(pkt):
   db_pkt = parse_pkt(pkt)
   add_pkt_to_db(db_pkt)
 
+
 def clean_up(pcap_file):
-  os.rename(pcap_file, os.path.join(HOME, PCAP_FOLDER, "processed", pcap_file.name))
+  os.rename(pcap_file, os.path.join(
+      HOME, PCAP_FOLDER, "processed", pcap_file.name))
+
 
 setup()
 pcap_file = next_pcap_file()
