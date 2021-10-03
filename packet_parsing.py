@@ -45,19 +45,23 @@ def next_pcap_file():
     if os.path.isfile(p):
       return p
 
+def create_pkt(pkt):
+  db_pkt = DbPacket()
+  db_pkt.atime = datetime.utcfromtimestamp(int(pkt.time)).strftime('%Y-%m-%d %H:%M:%S')  # arrival time
+  db_pkt.protocol = "DNS"
+  db_pkt.src_ip = pkt[IP].src
+  db_pkt.src_mac = pkt[Ether].src
+  db_pkt.dst_ip = pkt[IP].dst
+  db_pkt.dst_mac = pkt[Ether].dst
+  db_pkt.size = pkt.len
+  return db_pkt
+
 def parse_pkt(pkt):      
   db_pkt = None
   print(pkt.summary())
   if pkt.haslayer(DNS):
     # print(f"DNS: {pkt[DNS].show()}")
-    db_pkt = DbPacket()
-    db_pkt.atime = datetime.utcfromtimestamp(int(pkt.time)).strftime('%Y-%m-%d %H:%M:%S')  # arrival time
-    db_pkt.protocol = "DNS"
-    db_pkt.src_ip = pkt[IP].src
-    db_pkt.src_mac = pkt[Ether].src
-    db_pkt.dst_ip = pkt[IP].dst
-    db_pkt.dst_mac = pkt[Ether].dst
-    db_pkt.size = pkt.len
+    db_pkt = create_pkt(pkt)
     dns = pkt[DNS]
     if dns.qr == 1:       # DNS answer
       payload = ""
@@ -73,13 +77,21 @@ def parse_pkt(pkt):
     print(f"ARP: passed")
     pass
   elif pkt.haslayer(TCP):
-    print("TCP")
+    print("TCP/UDP")
+    db_pkt = create_pkt(pkt)
+    db_pkt.src_port = pkt[TCP].sport
+    db_pkt.dst_port = pkt[TCP].dport
+    db_pkt.payload = pkt[Raw].load
   elif pkt.haslayer(HTTP):
     print("HTTP")
   elif pkt.haslayer(ICMP):
     print("ICMP")
   elif pkt.haslayer(UDP):
     print("UDP")
+    db_pkt = create_pkt(pkt)
+    db_pkt.src_port = pkt[UDP].sport
+    db_pkt.dst_port = pkt[UDP].dport
+    db_pkt.payload = pkt[Raw].load
   else:
     # print(f"Another protocol: {pkt.show()}")
     pass
