@@ -78,6 +78,8 @@ def parse_pkt(pkt):
     print("HTTP")
   elif pkt.haslayer(ICMP):
     print("ICMP")
+  elif pkt.haslayer(UDP):
+    print("UDP")
   else:
     # print(f"Another protocol: {pkt.show()}")
     pass
