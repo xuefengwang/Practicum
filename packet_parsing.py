@@ -45,7 +45,7 @@ def next_pcap_file():
     if os.path.isfile(p):
       return p
 
-def parse_packet(pkt):
+def parse_pkt(pkt):      
   db_pkt = DbPacket()
   print(pkt.summary())
   if pkt.haslayer(DNS):
@@ -58,14 +58,14 @@ def parse_packet(pkt):
     db_pkt.dst_mac = pkt[Ether].dst
     db_pkt.size = pkt.len
     dns = pkt[DNS]
-    if dns.qr == 1:   # DNS answer
+    if dns.qr == 1:       # DNS answer
       payload = ""
       for i in range(dns.ancount):
         an = dns[DNSRR][i]
-        if an.type == 1: # A record
+        if an.type == 1:  # A record
           payload += f"{an.rrname, an.rdata}; "
       db_pkt.payload = payload
-    elif dns.qr == 0:   # DNS question
+    elif dns.qr == 0:     # DNS question
       db_pkt.payload = dns[DNSQR].qname
     print(f"{db_pkt}")
   elif pkt.haslayer(ARP):
@@ -79,6 +79,21 @@ def parse_packet(pkt):
     print("ICMP")
   else:
     print(f"Another protocol: {pkt.show()}")
+  return db_pkt
+
+def add_pkt_to_db(db_pkt: DbPacket):
+  db_cursor = db_conn.cursor()
+  insert_stmt = (
+    "INSERT INTO packet (packet_time, protocol, src_ip, src_mac, dst_ip, dst_mac, size, payload) " 
+    "VALUES (%s, %s, %s, %s, %s, %s, %d, %s)"
+  )
+  data = (db_pkt.atime, db_pkt.protocol, db_pkt.src_ip, db_pkt.src_mac, db_pkt.dst_ip, db_pkt.dst_mac, db_pkt.size, db_pkt.payload)
+  result = db_cursor.execute(insert_stmt, data)
+  print(f"db result {result}")
+
+def process_pkt(pkt):
+  db_pkt = parse_pkt(pkt)
+  add_pkt_to_db(db_pkt)
 
 def clean_up(pcap_file):
   os.rename(pcap_file, os.path.join(HOME, PCAP_FOLDER, "processed", pcap_file.name))
@@ -87,6 +102,6 @@ def clean_up(pcap_file):
 pcap_file = next_pcap_file()
 
 print(f"processing {pcap_file}")
-sniff(count=12, offline=str(pcap_file), prn=parse_packet, store=0)
+sniff(count=12, offline=str(pcap_file), prn=process_pkt, store=0)
 
 # clean_up(pcap_file)
