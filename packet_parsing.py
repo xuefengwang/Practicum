@@ -5,6 +5,7 @@ from pathlib import Path
 import mysql.connector
 import configparser
 from datetime import datetime
+import time
 load_layer("http")
 
 HOME = str(Path.home())
@@ -46,6 +47,8 @@ def setup():
 def next_pcap_file():
   dir = os.path.join(HOME, PCAP_FOLDER)
   paths = sorted(Path(dir).iterdir(), key=os.path.getmtime)
+  if len(paths) == 1:       # last one is probably the one still being written
+      return None
   for p in paths:
     if os.path.isfile(p):
       return p
@@ -137,9 +140,11 @@ def clean_up(pcap_file):
 
 
 setup()
-pcap_file = next_pcap_file()
-
-print(f"processing {pcap_file}")
-sniff(offline=str(pcap_file), prn=process_pkt, store=0)
-
-clean_up(pcap_file)
+while (True):
+    pcap_file = next_pcap_file()
+    if pcap_file == None:
+        time.sleep(300)     # no more files to process, sleep 5 minutes
+    else:
+        print(f"processing {pcap_file}")
+        sniff(offline=str(pcap_file), prn=process_pkt, store=0)
+        clean_up(pcap_file)
