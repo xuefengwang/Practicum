@@ -69,7 +69,7 @@ def create_pkt(pkt, protocol):
 
 def parse_pkt(pkt):
   db_pkt = None
-  print(pkt.summary())
+  # print(pkt.summary())
   if pkt.haslayer(DNS):
     # print(f"DNS: {pkt[DNS].show()}")
     db_pkt = create_pkt(pkt, 'DNS')
@@ -83,12 +83,12 @@ def parse_pkt(pkt):
       db_pkt.payload = payload
     elif dns.qr == 0:     # DNS question
       db_pkt.payload = dns[DNSQR].qname
-    print(f"{db_pkt}")
+    # print(f"{db_pkt}")
   elif pkt.haslayer(ARP):
     print(f"ARP: passed")
     pass
   elif pkt.haslayer(TCP):
-    print("TCP")
+    # print("TCP")
     protocol = "TCP"
     if pkt[TCP].sport == 443 or pkt[TCP].dport == 443:
       protocol = "TLS"
@@ -96,13 +96,13 @@ def parse_pkt(pkt):
     db_pkt.src_port = pkt[TCP].sport
     db_pkt.dst_port = pkt[TCP].dport
     if pkt.haslayer(Raw):
-      db_pkt.payload = str(pkt[Raw].load)[:1023]
+      db_pkt.payload = str(pkt[Raw].load)
   elif pkt.haslayer(HTTP):
     print("HTTP")
   elif pkt.haslayer(ICMP):
     print("ICMP")
   elif pkt.haslayer(UDP):
-    print("UDP")
+    # print("UDP")
     db_pkt = create_pkt(pkt, 'UDP')
     db_pkt.src_port = pkt[UDP].sport
     db_pkt.dst_port = pkt[UDP].dport
@@ -122,10 +122,13 @@ def add_pkt_to_db(db_pkt: DbPacket):
       "INSERT INTO packet (packet_time, protocol, src_ip, src_port, src_mac, dst_ip, dst_port, dst_mac, size, payload) "
       "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)"
   )
+  db_payload = db_pkt.payload
+  if db_payload:
+    db_payload = db_payload[:1023]
   data = (db_pkt.atime, db_pkt.protocol, db_pkt.src_ip, db_pkt.src_port, db_pkt.src_mac,
-          db_pkt.dst_ip, db_pkt.dst_port, db_pkt.dst_mac, db_pkt.size, db_pkt.payload)
+          db_pkt.dst_ip, db_pkt.dst_port, db_pkt.dst_mac, db_pkt.size, db_payload)
   result = db_cursor.execute(insert_stmt, data)
-  print(f"db result {result}, {db_cursor.lastrowid}")
+  # print(f"db result {result}, {db_cursor.lastrowid}")
   db_conn.commit()
 
 
