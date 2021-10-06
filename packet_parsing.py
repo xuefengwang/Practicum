@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 from scapy.all import *
 import os
+import re
 from pathlib import Path
 import mysql.connector
 import configparser
@@ -9,10 +10,12 @@ import time
 load_layer("http")
 
 HOME = str(Path.home())
-PCAP_FOLDER = "wlan0_pcap"
+PCAP_FOLDER = "wlan0_pcap/test"
+SKIPPED_PCAP = "skipped.pcap"
 # PCAP_FOLDER = "Downloads/pcaps"
+LOCAL_IP_REGEX = "10.20.1.[0-9]{1,3}"
 db_conn = None
-
+error_file = open("error.log", "a")
 
 class DbPacket:
   def __init__(self):
@@ -69,7 +72,9 @@ def create_pkt(pkt, protocol):
 
 def parse_pkt(pkt):
   db_pkt = None
-  # print(pkt.summary())
+  # skip internal chat or ARP
+  if pkt.haslayer(IP) and re.match(LOCAL_IP_REGEX, pkt[IP].src) and re.match(LOCAL_IP_REGEX, pkt[IP].dst):
+    return
   if pkt.haslayer(DNS):
     # print(f"DNS: {pkt[DNS].show()}")
     db_pkt = create_pkt(pkt, 'DNS')
@@ -85,7 +90,7 @@ def parse_pkt(pkt):
       db_pkt.payload = dns[DNSQR].qname
     # print(f"{db_pkt}")
   elif pkt.haslayer(ARP):
-    print(f"ARP: passed")
+    # print(f"ARP: passed")
     pass
   elif pkt.haslayer(TCP):
     # print("TCP")
@@ -98,9 +103,11 @@ def parse_pkt(pkt):
     if pkt.haslayer(Raw):
       db_pkt.payload = str(pkt[Raw].load)
   elif pkt.haslayer(HTTP):
-    print("HTTP")
+    # print("HTTP")
+    wrpcap(SKIPPED_PCAP, pkt, append=True)
   elif pkt.haslayer(ICMP):
-    print("ICMP")
+    # print("ICMP")
+    wrpcap(SKIPPED_PCAP, pkt, append=True)
   elif pkt.haslayer(UDP):
     # print("UDP")
     db_pkt = create_pkt(pkt, 'UDP')
@@ -133,8 +140,13 @@ def add_pkt_to_db(db_pkt: DbPacket):
 
 
 def process_pkt(pkt):
-  db_pkt = parse_pkt(pkt)
-  add_pkt_to_db(db_pkt)
+  try:
+    db_pkt = parse_pkt(pkt)
+    add_pkt_to_db(db_pkt)
+    print(".", end='');
+  except Exception as e:
+    error_file.write(f"Error: {e}, packet: {pkt.summary()}\n\n")
+    wrpcap(SKIPPED_PCAP, pkt, append=True)
 
 
 def clean_up(pcap_file):
@@ -151,3 +163,5 @@ while (True):
         print(f"processing {pcap_file}")
         sniff(offline=str(pcap_file), prn=process_pkt, store=0)
         clean_up(pcap_file)
+        print("\n")
+
