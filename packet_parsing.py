@@ -47,11 +47,11 @@ def setup():
 def next_pcap_file():
   dir = os.path.join(HOME, PCAP_FOLDER)
   paths = sorted(Path(dir).iterdir(), key=os.path.getmtime)
-  if len(paths) == 1:       # last one is probably the one still being written
-      return None
-  for p in paths:
-    if os.path.isfile(p):
-      return p
+  paths = [x for x in paths if os.path.isfile(x)]
+  if len(paths) <= 1:       # last one is probably the one still being written
+    print(f"no more available files, {paths}")
+    return None
+  return paths[0]
 
 
 def create_pkt(pkt, protocol):
