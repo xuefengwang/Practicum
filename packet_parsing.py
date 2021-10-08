@@ -10,7 +10,7 @@ import time
 load_layer("http")
 
 HOME = str(Path.home())
-PCAP_FOLDER = "wlan0_pcap/test"
+PCAP_FOLDER = "wlan0_pcap"
 SKIPPED_PCAP = "skipped.pcap"
 # PCAP_FOLDER = "Downloads/pcaps"
 LOCAL_IP_REGEX = "10.20.1.[0-9]{1,3}"
@@ -22,6 +22,8 @@ class DbPacket:
     self.payload = None
     self.src_port = None
     self.dst_port = None
+    self.src_ip = None
+    self.dst_ip = None
   atime: str
   protocol: str
   src_ip: str
@@ -62,19 +64,18 @@ def create_pkt(pkt, protocol):
   db_pkt.atime = datetime.utcfromtimestamp(
       int(pkt.time)).strftime('%Y-%m-%d %H:%M:%S')  # arrival time
   db_pkt.protocol = protocol
-  db_pkt.src_ip = pkt[IP].src
+  if pkt.haslayer(IP):
+    db_pkt.src_ip = pkt[IP].src
+    db_pkt.dst_ip = pkt[IP].dst
   db_pkt.src_mac = pkt[Ether].src
-  db_pkt.dst_ip = pkt[IP].dst
   db_pkt.dst_mac = pkt[Ether].dst
-  db_pkt.size = pkt.len
+  db_pkt.size = pkt.wirelen
   return db_pkt
 
 
 def parse_pkt(pkt):
   db_pkt = None
-  # skip internal chat or ARP
-  if pkt.haslayer(IP) and re.match(LOCAL_IP_REGEX, pkt[IP].src) and re.match(LOCAL_IP_REGEX, pkt[IP].dst):
-    return
+  # print(f"pkt: {pkt.summary()}")
   if pkt.haslayer(DNS):
     # print(f"DNS: {pkt[DNS].show()}")
     db_pkt = create_pkt(pkt, 'DNS')
@@ -90,34 +91,46 @@ def parse_pkt(pkt):
       db_pkt.payload = dns[DNSQR].qname
     # print(f"{db_pkt}")
   elif pkt.haslayer(ARP):
-    # print(f"ARP: passed")
-    pass
-  elif pkt.haslayer(TCP):
-    # print("TCP")
-    protocol = "TCP"
-    if pkt[TCP].sport == 443 or pkt[TCP].dport == 443:
-      protocol = "TLS"
-    db_pkt = create_pkt(pkt, protocol)
-    db_pkt.src_port = pkt[TCP].sport
-    db_pkt.dst_port = pkt[TCP].dport
-    if pkt.haslayer(Raw):
-      db_pkt.payload = str(pkt[Raw].load)
-  elif pkt.haslayer(HTTP):
-    # print("HTTP")
-    wrpcap(SKIPPED_PCAP, pkt, append=True)
-  elif pkt.haslayer(ICMP):
-    # print("ICMP")
-    wrpcap(SKIPPED_PCAP, pkt, append=True)
-  elif pkt.haslayer(UDP):
-    # print("UDP")
-    db_pkt = create_pkt(pkt, 'UDP')
-    db_pkt.src_port = pkt[UDP].sport
-    db_pkt.dst_port = pkt[UDP].dport
-    if pkt.haslayer(Raw):
-      db_pkt.payload = str(pkt[Raw].load)
+    db_pkt = create_pkt(pkt, "ARP")
+    arp = pkt[ARP]
+    payload = None
+    if arp.op == 1:
+      payload = "Who has " + arp.pdst + "? Tell " + arp.psrc
+    elif arp.op == 2:
+      payload = arp.psrc + " is at " + arp.hwsrc
+    else:
+      print("Error: unsupported arp opcode")
+    db_pkt.payload = payload
   else:
-    # print(f"Another protocol: {pkt.show()}")
-    pass
+    # skip internal chat or ARP
+    if pkt.haslayer(IP) and re.match(LOCAL_IP_REGEX, pkt[IP].src) and re.match(LOCAL_IP_REGEX, pkt[IP].dst):
+      print("local chat, skipped")
+      pass
+    elif pkt.haslayer(TCP):
+      print("TCP")
+      protocol = "TCP"
+      if pkt[TCP].sport == 443 or pkt[TCP].dport == 443:
+        protocol = "TLS"
+      elif pkt.haslayer(HTTP):
+        protocol = "HTTP"
+      db_pkt = create_pkt(pkt, protocol)
+      db_pkt.src_port = pkt[TCP].sport
+      db_pkt.dst_port = pkt[TCP].dport
+      if pkt.haslayer(HTTP):
+        db_pkt.payload = raw(pkt[HTTP]).decode('utf-8')
+      elif pkt.haslayer(Raw):
+        db_pkt.payload = str(pkt[Raw].load)
+    elif pkt.haslayer(UDP):
+      # print("UDP")
+      db_pkt = create_pkt(pkt, 'UDP')
+      db_pkt.src_port = pkt[UDP].sport
+      db_pkt.dst_port = pkt[UDP].dport
+      if pkt.haslayer(Raw):
+        db_pkt.payload = str(pkt[Raw].load)
+    else:
+      print(f"Another protocol: {pkt.show()}")
+      wrpcap(SKIPPED_PCAP, pkt, append=True)
+      pass
   return db_pkt
 
 
@@ -135,7 +148,7 @@ def add_pkt_to_db(db_pkt: DbPacket):
   data = (db_pkt.atime, db_pkt.protocol, db_pkt.src_ip, db_pkt.src_port, db_pkt.src_mac,
           db_pkt.dst_ip, db_pkt.dst_port, db_pkt.dst_mac, db_pkt.size, db_payload)
   result = db_cursor.execute(insert_stmt, data)
-  # print(f"db result {result}, {db_cursor.lastrowid}")
+  print(f"db result {result}, {db_cursor.lastrowid}")
   db_conn.commit()
 
 
