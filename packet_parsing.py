@@ -102,7 +102,7 @@ def parse_pkt(pkt):
       print("Error: unsupported arp opcode")
     db_pkt.payload = payload
   else:
-    # skip internal chat or ARP
+    # skip internal chat 
     if pkt.haslayer(IP) and re.match(LOCAL_IP_REGEX, pkt[IP].src) and re.match(LOCAL_IP_REGEX, pkt[IP].dst):
       print("local chat, skipped")
       pass

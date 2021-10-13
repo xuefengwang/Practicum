@@ -3,3 +3,4 @@
 *.ini
 *.log
 *.pcap
+node_modules
