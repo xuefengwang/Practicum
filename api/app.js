@@ -5,6 +5,7 @@ const express = require('express');
 const path = require('path');
 const cookieParser = require('cookie-parser');
 const logger = require('morgan');
+const config = require(process.env['HOME'] + 'iot_api.js');
 
 const indexRouter = require('./routes/index');
 
