@@ -4,3 +4,4 @@
 *.log
 *.pcap
 node_modules
+old_log

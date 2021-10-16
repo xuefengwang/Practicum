@@ -7,6 +7,7 @@ import mysql.connector
 import configparser
 from datetime import datetime
 import time
+import ipaddress
 load_layer("http")
 
 HOME = str(Path.home())
@@ -139,14 +140,14 @@ def add_pkt_to_db(db_pkt: DbPacket):
     return
   db_cursor = db_conn.cursor()
   insert_stmt = (
-      "INSERT INTO packet (packet_time, protocol, src_ip, src_port, src_mac, dst_ip, dst_port, dst_mac, size, payload) "
-      "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)"
+      "INSERT INTO packet (packet_time, protocol, src_ip, src_ip_number, src_port, src_mac, dst_ip, dst_ip_number, dst_port, dst_mac, size, payload) "
+      "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)"
   )
   db_payload = db_pkt.payload
   if db_payload:
     db_payload = db_payload[:1023]
-  data = (db_pkt.atime, db_pkt.protocol, db_pkt.src_ip, db_pkt.src_port, db_pkt.src_mac,
-          db_pkt.dst_ip, db_pkt.dst_port, db_pkt.dst_mac, db_pkt.size, db_payload)
+  data = (db_pkt.atime, db_pkt.protocol, db_pkt.src_ip, int(ipaddress.IPv4Address(db_pkt.src_ip)), db_pkt.src_port, db_pkt.src_mac,
+          db_pkt.dst_ip, int(ipaddress.IPv4Address(db_pkt.dst_ip)), db_pkt.dst_port, db_pkt.dst_mac, db_pkt.size, db_payload)
   result = db_cursor.execute(insert_stmt, data)
   print(f"db result {result}, {db_cursor.lastrowid}")
   db_conn.commit()
