@@ -11,8 +11,8 @@ import ipaddress
 load_layer("http")
 # 6073372 max id as of 4:09 10/18
 HOME = str(Path.home())
-# PCAP_FOLDER = "wlan0_pcap"
-PCAP_FOLDER = "Downloads/pcaps"
+PCAP_FOLDER = "wlan0_pcap"
+# PCAP_FOLDER = "Downloads/pcaps"
 SKIPPED_PCAP = "skipped.pcap"
 LOCAL_IP_REGEX = "10.20.1.[0-9]{1,3}"
 db_conn = None
@@ -172,19 +172,21 @@ def add_pkt_to_db(db_pkt: DbPacket):
   if db_pkt == None:
     return
   db_cursor = db_conn.cursor()
-  # get ip location if src_ip or dst_ip is public ip address
-  src_ip = ipaddress.IPv4Address(db_pkt.src_ip)
-  dst_ip = ipaddress.IPv4Address(db_pkt.dst_ip)
+
   src_ip_coord_id = None
   dst_ip_coord_id = None
-  if not src_ip.is_private:
-    print("src ip")
-    src_ip_number = int(src_ip)
-    src_ip_coord_id = get_ip_coord(db_pkt.src_ip, src_ip_number, db_cursor)
-  elif not dst_ip.is_private:
-    print("dst ip")
-    dst_ip_number = int(dst_ip)
-    dst_ip_coord_id = get_ip_coord(db_pkt.dst_ip, dst_ip_number, db_cursor)
+  if db_pkt.src_ip is not None:
+    # get ip location if src_ip or dst_ip is public ip address
+    src_ip = ipaddress.IPv4Address(db_pkt.src_ip)
+    dst_ip = ipaddress.IPv4Address(db_pkt.dst_ip)
+    if not src_ip.is_private:
+      print("src ip")
+      src_ip_number = int(src_ip)
+      src_ip_coord_id = get_ip_coord(db_pkt.src_ip, src_ip_number, db_cursor)
+    elif not dst_ip.is_private:
+      print("dst ip")
+      dst_ip_number = int(dst_ip)
+      dst_ip_coord_id = get_ip_coord(db_pkt.dst_ip, dst_ip_number, db_cursor)
 
   insert_stmt = (
       "INSERT INTO packet (packet_time, protocol, src_ip, src_ip_number, src_ip_coord_id, src_port, src_mac, "
