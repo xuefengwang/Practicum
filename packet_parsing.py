@@ -9,14 +9,15 @@ from datetime import datetime
 import time
 import ipaddress
 load_layer("http")
-
+# 6073372 max id as of 4:09 10/18
 HOME = str(Path.home())
-PCAP_FOLDER = "wlan0_pcap"
+# PCAP_FOLDER = "wlan0_pcap"
+PCAP_FOLDER = "Downloads/pcaps"
 SKIPPED_PCAP = "skipped.pcap"
-# PCAP_FOLDER = "Downloads/pcaps"
 LOCAL_IP_REGEX = "10.20.1.[0-9]{1,3}"
 db_conn = None
-error_file = open("error.log", "a")
+error_file = open("error.log", "w")
+
 
 class DbPacket:
   def __init__(self):
@@ -43,13 +44,15 @@ class DbPacket:
 def setup():
   global db_conn
   config = configparser.ConfigParser()
-  config.read("packet_parsing.ini")
+  config.read(os.path.join(HOME, "packet_parsing.ini"))
   db_config = dict(config.items('Database'))
   db_conn = mysql.connector.connect(**db_config)
   print(f"db conn: {db_conn.connection_id}")
 
 # The captured pcap files are located at $HOME/wlan0_pcap folder.
 # Any file in that folder is assumed to have not been processed.
+
+
 def next_pcap_file():
   dir = os.path.join(HOME, PCAP_FOLDER)
   paths = sorted(Path(dir).iterdir(), key=os.path.getmtime)
@@ -103,7 +106,7 @@ def parse_pkt(pkt):
       print("Error: unsupported arp opcode")
     db_pkt.payload = payload
   else:
-    # skip internal chat 
+    # skip internal chat
     if pkt.haslayer(IP) and re.match(LOCAL_IP_REGEX, pkt[IP].src) and re.match(LOCAL_IP_REGEX, pkt[IP].dst):
       print("local chat, skipped")
       pass
@@ -135,31 +138,78 @@ def parse_pkt(pkt):
   return db_pkt
 
 
+def get_ip_coord(ip_address, ip_number, db_cursor):
+  print(f"get_ip_coord: {ip_address} {type(ip_address)}")
+  # check if it has already been looked up
+  select_stmt = (
+      "SELECT id FROM ip_coordinate "
+      "WHERE ip_address = %s"
+  )
+  db_cursor.execute(select_stmt, (ip_address,))
+  coord = db_cursor.fetchone()
+  ip_coord_id = None
+  if coord == None:
+    select_stmt = (
+        "SELECT latitude, longitude FROM ip_location WHERE ip_start < %s AND ip_end > %s"
+    )
+    db_cursor.execute(select_stmt, (ip_number, ip_number))
+    lat_long = db_cursor.fetchone()
+    if lat_long == None:
+      error_file.write(f"Couldn't find coordinate for ip: {ip_address}.\n")
+    else:
+      insert_stmt = (
+          "INSERT INTO ip_coordinate (ip_address, latitude, longitude) "
+          "VALUES(%s, %s, %s)"
+      )
+      db_cursor.execute(insert_stmt, (ip_address, lat_long[0], lat_long[1]))
+      ip_coord_id = db_cursor.lastrowid
+  else:
+    ip_coord_id = coord[0]
+  return ip_coord_id
+
+
 def add_pkt_to_db(db_pkt: DbPacket):
   if db_pkt == None:
     return
   db_cursor = db_conn.cursor()
+  # get ip location if src_ip or dst_ip is public ip address
+  src_ip = ipaddress.IPv4Address(db_pkt.src_ip)
+  dst_ip = ipaddress.IPv4Address(db_pkt.dst_ip)
+  src_ip_coord_id = None
+  dst_ip_coord_id = None
+  if not src_ip.is_private:
+    print("src ip")
+    src_ip_number = int(src_ip)
+    src_ip_coord_id = get_ip_coord(db_pkt.src_ip, src_ip_number, db_cursor)
+  elif not dst_ip.is_private:
+    print("dst ip")
+    dst_ip_number = int(dst_ip)
+    dst_ip_coord_id = get_ip_coord(db_pkt.dst_ip, dst_ip_number, db_cursor)
+
   insert_stmt = (
-      "INSERT INTO packet (packet_time, protocol, src_ip, src_ip_number, src_port, src_mac, dst_ip, dst_ip_number, dst_port, dst_mac, size, payload) "
-      "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)"
+      "INSERT INTO packet (packet_time, protocol, src_ip, src_ip_number, src_ip_coord_id, src_port, src_mac, "
+      "dst_ip, dst_ip_number, dst_ip_coord_id, dst_port, dst_mac, size, payload) "
+      "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)"
   )
   db_payload = db_pkt.payload
   if db_payload:
     db_payload = db_payload[:1023]
-  data = (db_pkt.atime, db_pkt.protocol, db_pkt.src_ip, int(ipaddress.IPv4Address(db_pkt.src_ip)), db_pkt.src_port, db_pkt.src_mac,
-          db_pkt.dst_ip, int(ipaddress.IPv4Address(db_pkt.dst_ip)), db_pkt.dst_port, db_pkt.dst_mac, db_pkt.size, db_payload)
+  data = (db_pkt.atime, db_pkt.protocol, db_pkt.src_ip, int(ipaddress.IPv4Address(db_pkt.src_ip)), src_ip_coord_id, db_pkt.src_port, db_pkt.src_mac,
+          db_pkt.dst_ip, int(ipaddress.IPv4Address(db_pkt.dst_ip)), dst_ip_coord_id, db_pkt.dst_port, db_pkt.dst_mac, db_pkt.size, db_payload)
   result = db_cursor.execute(insert_stmt, data)
   print(f"db result {result}, {db_cursor.lastrowid}")
   db_conn.commit()
+  # db_conn.rollback()
 
 
 def process_pkt(pkt):
   try:
     db_pkt = parse_pkt(pkt)
     add_pkt_to_db(db_pkt)
-    print(".", end='');
+    print(".", end='')
   except Exception as e:
     error_file.write(f"Error: {e}, packet: {pkt.summary()}\n\n")
+    traceback.print_exc(file=error_file)
     wrpcap(SKIPPED_PCAP, pkt, append=True)
 
 
@@ -170,12 +220,11 @@ def clean_up(pcap_file):
 
 setup()
 while (True):
-    pcap_file = next_pcap_file()
-    if pcap_file == None:
-        time.sleep(300)     # no more files to process, sleep 5 minutes
-    else:
-        print(f"processing {pcap_file}")
-        sniff(offline=str(pcap_file), prn=process_pkt, store=0)
-        clean_up(pcap_file)
-        print("\n")
-
+  pcap_file = next_pcap_file()
+  if pcap_file == None:
+    time.sleep(300)     # no more files to process, sleep 5 minutes
+  else:
+    print(f"processing {pcap_file}")
+    sniff(offline=str(pcap_file), prn=process_pkt, store=0)
+    clean_up(pcap_file)
+    print("\n")

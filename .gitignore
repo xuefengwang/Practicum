@@ -5,3 +5,5 @@
 *.pcap
 node_modules
 old_log
+.idea
+.DS_Store

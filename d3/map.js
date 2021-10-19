@@ -2,9 +2,9 @@ const WIDTH = 800;
 const HEIGHT = 500;
 
 // D3 Projection
-const projection = d3.geo.albersUsa()
-  // .translate([WIDTH / 2, HEIGHT / 2])    // translate to center of screen
-  .scale([1000]);          // scale things down so see entire US
+const projection = d3.geo.mercator()
+  .scale(126)
+  .translate([WIDTH / 2, HEIGHT / 2]);    // translate to center of screen
 
 // Define path generator
 const path = d3.geo.path()               // path generator that will convert GeoJSON to SVG paths
@@ -17,7 +17,7 @@ const svg = d3.select("body")
 
 // const curve = d3.svg.line().curve(d3.curveNatural)
 
-d3.json("us-states.json", (err, topoJson) => {
+d3.json("world-110m.json", (err, topoJson) => {
   if (err) console.log(err);
 
   svg.selectAll("path")
@@ -29,19 +29,20 @@ d3.json("us-states.json", (err, topoJson) => {
     .style("stroke-width", "1")
     .style("fill", "rgb(213, 222, 217)");
 
-  svg.selectAll("line")
+  svg.selectAll("circle")
     .data([
       [
-        [-122.490402, 37.786453], [-97.516428, 35.467560]
+        [-122.490402, 37.786453]
+      ],
+      [
+        [-97.516428, 35.467560]
       ]
     ])
     .enter()
-    .append("line")
-    .attr("x1", d => projection(d[0])[0])
-    .attr("y1", d => projection(d[0])[1])
-    .attr("x2", d => projection(d[1])[0])
-    .attr("y2", d => projection(d[1])[1])
-    .attr("stroke-width", 1)
-    .attr("stroke", "black");
-
+    .append("circle")
+    .attr("cx", d => projection(d[0])[0])
+    .attr("cy", d => projection(d[0])[1])
+    .attr("r", "5")
+    .style("fill", "rgb(217,91,67)")
+    .style("opacity", 0.85);
 });
