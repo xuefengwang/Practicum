@@ -108,10 +108,10 @@ def parse_pkt(pkt):
   else:
     # skip internal chat
     if pkt.haslayer(IP) and re.match(LOCAL_IP_REGEX, pkt[IP].src) and re.match(LOCAL_IP_REGEX, pkt[IP].dst):
-      print("local chat, skipped")
+      # print("local chat, skipped")
       pass
     elif pkt.haslayer(TCP):
-      print("TCP")
+      # print("TCP")
       protocol = "TCP"
       if pkt[TCP].sport == 443 or pkt[TCP].dport == 443:
         protocol = "TLS"
@@ -139,7 +139,7 @@ def parse_pkt(pkt):
 
 
 def get_ip_coord(ip_address, ip_number, db_cursor):
-  print(f"get_ip_coord: {ip_address} {type(ip_address)}")
+  # print(f"get_ip_coord: {ip_address}")
   # check if it has already been looked up
   select_stmt = (
       "SELECT id FROM ip_coordinate "
@@ -173,6 +173,8 @@ def add_pkt_to_db(db_pkt: DbPacket):
     return
   db_cursor = db_conn.cursor()
 
+  src_ip_number = None
+  dst_ip_number = None
   src_ip_coord_id = None
   dst_ip_coord_id = None
   if db_pkt.src_ip is not None:
@@ -180,11 +182,9 @@ def add_pkt_to_db(db_pkt: DbPacket):
     src_ip = ipaddress.IPv4Address(db_pkt.src_ip)
     dst_ip = ipaddress.IPv4Address(db_pkt.dst_ip)
     if not src_ip.is_private:
-      print("src ip")
       src_ip_number = int(src_ip)
       src_ip_coord_id = get_ip_coord(db_pkt.src_ip, src_ip_number, db_cursor)
     elif not dst_ip.is_private:
-      print("dst ip")
       dst_ip_number = int(dst_ip)
       dst_ip_coord_id = get_ip_coord(db_pkt.dst_ip, dst_ip_number, db_cursor)
 
@@ -196,10 +196,10 @@ def add_pkt_to_db(db_pkt: DbPacket):
   db_payload = db_pkt.payload
   if db_payload:
     db_payload = db_payload[:1023]
-  data = (db_pkt.atime, db_pkt.protocol, db_pkt.src_ip, int(ipaddress.IPv4Address(db_pkt.src_ip)), src_ip_coord_id, db_pkt.src_port, db_pkt.src_mac,
-          db_pkt.dst_ip, int(ipaddress.IPv4Address(db_pkt.dst_ip)), dst_ip_coord_id, db_pkt.dst_port, db_pkt.dst_mac, db_pkt.size, db_payload)
+  data = (db_pkt.atime, db_pkt.protocol, db_pkt.src_ip, src_ip_number, src_ip_coord_id, db_pkt.src_port, db_pkt.src_mac,
+          db_pkt.dst_ip, dst_ip_number, dst_ip_coord_id, db_pkt.dst_port, db_pkt.dst_mac, db_pkt.size, db_payload)
   result = db_cursor.execute(insert_stmt, data)
-  print(f"db result {result}, {db_cursor.lastrowid}")
+  # print(f"db result {result}, {db_cursor.lastrowid}")
   db_conn.commit()
   # db_conn.rollback()
 
