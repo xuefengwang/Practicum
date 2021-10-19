@@ -15,8 +15,6 @@ const svg = d3.select("body")
   .attr("width", WIDTH)
   .attr("height", HEIGHT);
 
-// const curve = d3.svg.line().curve(d3.curveNatural)
-
 d3.json("world-110m.json", (err, topoJson) => {
   if (err) console.log(err);
 

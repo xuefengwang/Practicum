@@ -14,7 +14,6 @@ HOME = str(Path.home())
 PCAP_FOLDER = "wlan0_pcap"
 # PCAP_FOLDER = "Downloads/pcaps"
 SKIPPED_PCAP = "skipped.pcap"
-LOCAL_IP_REGEX = "10.20.1.[0-9]{1,3}"
 db_conn = None
 error_file = open("error.log", "w")
 
@@ -107,7 +106,7 @@ def parse_pkt(pkt):
     db_pkt.payload = payload
   else:
     # skip internal chat
-    if pkt.haslayer(IP) and re.match(LOCAL_IP_REGEX, pkt[IP].src) and re.match(LOCAL_IP_REGEX, pkt[IP].dst):
+    if pkt.haslayer(IP) and ipaddress.IPv4Address(pkt[ip].src).is_private and ipaddress.IPv4Address(pkt[IP].dst).is_private:
       # print("local chat, skipped")
       pass
     elif pkt.haslayer(TCP):
@@ -224,6 +223,7 @@ setup()
 while (True):
   pcap_file = next_pcap_file()
   if pcap_file == None:
+    print("no more files...")
     time.sleep(300)     # no more files to process, sleep 5 minutes
   else:
     print(f"processing {pcap_file}")
