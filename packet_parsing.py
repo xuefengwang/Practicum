@@ -11,8 +11,6 @@ import ipaddress
 load_layer("http")
 # 6073372 max id as of 4:09 10/18
 HOME = str(Path.home())
-PCAP_FOLDER = "wlan0_pcap"
-# PCAP_FOLDER = "Downloads/pcaps"
 SKIPPED_PCAP = "skipped.pcap"
 db_conn = None
 error_file = open("error.log", "w")
@@ -48,19 +46,6 @@ def setup():
   db_conn = mysql.connector.connect(**db_config)
   print(f"db conn: {db_conn.connection_id}")
 
-# The captured pcap files are located at $HOME/wlan0_pcap folder.
-# Any file in that folder is assumed to have not been processed.
-
-
-def next_pcap_file():
-  dir = os.path.join(HOME, PCAP_FOLDER)
-  paths = sorted(Path(dir).iterdir(), key=os.path.getmtime)
-  paths = [x for x in paths if os.path.isfile(x)]
-  if len(paths) <= 1:       # last one is probably the one still being written
-    print(f"no more available files, {paths}")
-    return None
-  return paths[0]
-
 
 def create_pkt(pkt, protocol):
   db_pkt = DbPacket()
@@ -72,7 +57,7 @@ def create_pkt(pkt, protocol):
     db_pkt.dst_ip = pkt[IP].dst
   db_pkt.src_mac = pkt[Ether].src
   db_pkt.dst_mac = pkt[Ether].dst
-  db_pkt.size = pkt.wirelen
+  db_pkt.size = len(pkt)
   return db_pkt
 
 
@@ -106,7 +91,7 @@ def parse_pkt(pkt):
     db_pkt.payload = payload
   else:
     # skip internal chat
-    if pkt.haslayer(IP) and ipaddress.IPv4Address(pkt[ip].src).is_private and ipaddress.IPv4Address(pkt[IP].dst).is_private:
+    if pkt.haslayer(IP) and ipaddress.IPv4Address(pkt[IP].src).is_private and ipaddress.IPv4Address(pkt[IP].dst).is_private:
       # print("local chat, skipped")
       pass
     elif pkt.haslayer(TCP):
@@ -149,7 +134,7 @@ def get_ip_coord(ip_address, ip_number, db_cursor):
   ip_coord_id = None
   if coord == None:
     select_stmt = (
-        "SELECT latitude, longitude FROM ip_location WHERE ip_start < %s AND ip_end > %s"
+        "SELECT id, latitude, longitude FROM ip_location WHERE ip_start < %s AND ip_end > %s"
     )
     db_cursor.execute(select_stmt, (ip_number, ip_number))
     lat_long = db_cursor.fetchone()
@@ -157,10 +142,11 @@ def get_ip_coord(ip_address, ip_number, db_cursor):
       error_file.write(f"Couldn't find coordinate for ip: {ip_address}.\n")
     else:
       insert_stmt = (
-          "INSERT INTO ip_coordinate (ip_address, latitude, longitude) "
-          "VALUES(%s, %s, %s)"
+          "INSERT INTO ip_coordinate (ip_address, latitude, longitude, ip_location_id) "
+          "VALUES(%s, %s, %s, %s)"
       )
-      db_cursor.execute(insert_stmt, (ip_address, lat_long[0], lat_long[1]))
+      db_cursor.execute(
+          insert_stmt, (ip_address, lat_long[1], lat_long[2], lat_long[0]))
       ip_coord_id = db_cursor.lastrowid
   else:
     ip_coord_id = coord[0]
@@ -214,19 +200,12 @@ def process_pkt(pkt):
     wrpcap(SKIPPED_PCAP, pkt, append=True)
 
 
-def clean_up(pcap_file):
-  os.rename(pcap_file, os.path.join(
-      HOME, PCAP_FOLDER, "processed", pcap_file.name))
-
-
 setup()
-while (True):
-  pcap_file = next_pcap_file()
-  if pcap_file == None:
-    print("no more files...")
-    time.sleep(300)     # no more files to process, sleep 5 minutes
-  else:
-    print(f"processing {pcap_file}")
-    sniff(offline=str(pcap_file), prn=process_pkt, store=0)
-    clean_up(pcap_file)
-    print("\n")
+
+print("Start sniffing on wlan0...")
+try:
+  sniff(iface='wlan0', prn=process_pkt)
+except Exception as e:
+  error_file.write(f"Error: {e}")
+  traceback.print_exc(file=error_file)
+
