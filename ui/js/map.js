@@ -59,6 +59,7 @@ function updateList(data) {
     .enter()
     .append("tr")
     .html(d => {
-      return `<td>${d.latitude}, ${d.longitude}</td><td>${d.sum}</td>`;
+      return `<td>${d.city}, ${d.state_province}, ${d.country_code} ${d.zip}</td>
+            <td>(${d.latitude}, ${d.longitude})</td><td>${d.sum}</td>`;
     });
 }

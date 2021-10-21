@@ -1,5 +1,9 @@
+'use strict';
+
+const API_SERVICE = "http://localhost:3000/api"
 const WIDTH = 800;
 const HEIGHT = 500;
+
 
 // D3 Projection
 const projection = d3.geo.mercator()
@@ -27,20 +31,17 @@ d3.json("world-110m.json", (err, topoJson) => {
     .style("stroke-width", "1")
     .style("fill", "rgb(213, 222, 217)");
 
-  svg.selectAll("circle")
-    .data([
-      [
-        [-122.490402, 37.786453]
-      ],
-      [
-        [-97.516428, 35.467560]
-      ]
-    ])
-    .enter()
-    .append("circle")
-    .attr("cx", d => projection(d[0])[0])
-    .attr("cy", d => projection(d[0])[1])
-    .attr("r", "5")
-    .style("fill", "rgb(217,91,67)")
-    .style("opacity", 0.85);
+  d3.json(API_SERVICE + "/packets?duration=1", d => {
+    const locs = d.packets.list.map(ll => [[ll.longitude, ll.latitude]]);
+    console.log(locs.join(',\t'));
+    svg.selectAll("circle")
+      .data(locs)
+      .enter()
+      .append("circle")
+      .attr("cx", d => projection(d[0])[0])
+      .attr("cy", d => projection(d[0])[1])
+      .attr("r", "5")
+      .style("fill", "rgb(217,91,67)")
+      .style("opacity", 0.85);
+  });
 });

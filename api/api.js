@@ -26,6 +26,8 @@ function startApi(err, dbPool) {
 
   app.use('*', (req, res, next) => {
     req.db = dbPool;
+    res.header("Access-Control-Allow-Origin", "*");
+    res.header("Access-Control-Allow-Headers", "X-Requested-With");
     next();
   })
   app.use('/api', indexRouter);
