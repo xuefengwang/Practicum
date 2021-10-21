@@ -4,3 +4,6 @@ body {
 .fixed_button {
     width: 95px;
 }
+circle:hover {
+    cursor: pointer;
+}

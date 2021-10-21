@@ -3,13 +3,7 @@ const router = express.Router();
 const async = require('async');
 
 router.get('/packets', function (req, res, next) {
-  let duration = req.query.duration;
-  if (!duration) {
-    duration = 1;  // by default, return the last 1 hour
-  } else {
-    duration = parseInt(duration);
-    if (isNaN(duration)) duration = 1;
-  }
+  const duration = getDuration(req.query.duration);
   console.log(`packets for last ${duration} hour`);
   
   let packets;
@@ -25,7 +19,7 @@ router.get('/packets', function (req, res, next) {
           JOIN ip_coordinate ic ON p.dst_ip_coord_id = ic.id JOIN ip_location iloc ON ic.ip_location_id = iloc.id
           WHERE packet_time > NOW() - INTERVAL ? HOUR AND protocol != 'ARP' GROUP BY ic.latitude, ic.longitude
         ) u
-      GROUP BY u.latitude, u.longitude`, [duration, duration], (err, results) => {
+      GROUP BY u.latitude, u.longitude ORDER BY sum DESC`, [duration, duration], (err, results) => {
         if (err) return cb(err);
 
         packets = results.filter(a => a.latitude !== '0.000000' || a.longitude !== '0.000000');
@@ -41,8 +35,38 @@ router.get('/packets', function (req, res, next) {
 
 });
 
-function ip2int(ip) {
-  return ip.split('.').reduce(function (ipInt, octet) { return (ipInt << 8) + parseInt(octet, 10) }, 0) >>> 0;
+router.get('/loc', (req, res, next) => {
+  console.log("loc", req.query);
+  if (!req.query.lat || !req.query.lng) {
+    return res.json({error: "invalid latitude or longitude"});
+  }
+  const duration = getDuration(req.query.duration);
+  req.db.query(`
+  SELECT p.id, p.packet_time, p.protocol, p.src_ip, p.src_mac, p.dst_ip, p.dst_mac, p.size 
+    FROM packet p JOIN 
+    ( SELECT id FROM ip_coordinate WHERE latitude = ? AND longitude = ?) ic ON p.dst_ip_coord_id = ic.id 
+    WHERE p.packet_time > NOW() - INTERVAL ? HOUR AND p.protocol != 'ARP' 
+  UNION 
+  SELECT p.id, p.packet_time, p.protocol, p.src_ip, p.src_mac, p.dst_ip, p.dst_mac, p.size
+    FROM packet p JOIN 
+    ( SELECT id FROM ip_coordinate WHERE latitude = ? AND longitude = ?) ic ON p.src_ip_coord_id = ic.id 
+    WHERE p.packet_time > NOW() - INTERVAL ? HOUR AND p.protocol != 'ARP' 
+  ORDER BY id LIMIT 50;`, [req.query.lat, req.query.lng, duration, req.query.lat, req.query.lng, duration], (err, results) => {
+    if (err) return next(err);
+
+    res.json({loc_packets: results});
+  });
+});
+
+function getDuration(param) {
+  let duration = param;
+  if (!duration) {
+    duration = 1;  // by default, return the last 1 hour
+  } else {
+    duration = parseInt(duration);
+    if (isNaN(duration)) duration = 1;
+  }
+  return duration;
 }
 
 module.exports = router;
