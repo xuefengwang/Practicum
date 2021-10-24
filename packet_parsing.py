@@ -9,21 +9,17 @@ from datetime import datetime
 import time
 import ipaddress
 load_layer("http")
-# 6073372 max id as of 4:09 10/18
-HOME = str(Path.home())
-SKIPPED_PCAP = "skipped.pcap"
-db_conn = None
-error_file = open("error.log", "w")
 
 
 class DbPacket:
-  def __init__(self):
+  def __init__(self) -> None:
     self.payload = None
     self.src_port = None
     self.dst_port = None
     self.src_ip = None
     self.dst_ip = None
   atime: str
+  time: int
   protocol: str
   src_ip: str
   src_port: int
@@ -38,6 +34,48 @@ class DbPacket:
     return f"{self.atime} [{self.size} bytes]: {self.protocol} - {self.src_mac} => {self.dst_mac}, {self.src_ip} => {self.dst_ip}, {self.payload}"
 
 
+# a local cache to aggregate data, for every 10 seconds, same src and dst ip will consolidate with bytes accumulated
+class LocalCache:
+  def __init__(self) -> None:
+    self.packets = []
+    self.time = None
+  time: int
+  packets: list
+
+  def add_packet(self, pkt):
+    if self.time is None:
+      self.time = pkt.time
+      self.packets.append(pkt)
+    elif pkt.time - self.time < 10:
+      found = False
+      for p in self.packets:
+        if p.protocol == pkt.protocol and p.src_ip == pkt.src_ip and p.dst_ip == pkt.dst_ip:
+          # print(f"same src, dst, and protocol, {pkt}, {p}")
+          found = True
+          p.size += pkt.size
+          # print(f"new size: ${p}")
+          break
+      if not found:
+        self.packets.append(pkt)
+    else:
+      print(f"flush {pkt.time}, {self.time}, {len(self.packets)}")
+      print(".", end='')
+      for p in self.packets:
+        add_pkt_to_db(p)
+      self.time = pkt.time
+      self.packets = [pkt]
+
+  def __repr__(self):
+    return f"local cache: {self.time} {self.packets}"
+
+
+HOME = str(Path.home())
+SKIPPED_PCAP = "skipped.pcap"
+db_conn = None
+error_file = open("error.log", "w")
+local_cache = LocalCache()
+
+
 def setup():
   global db_conn
   config = configparser.ConfigParser()
@@ -49,8 +87,9 @@ def setup():
 
 def create_pkt(pkt, protocol):
   db_pkt = DbPacket()
+  db_pkt.time = int(pkt.time)
   db_pkt.atime = datetime.utcfromtimestamp(
-      int(pkt.time)).strftime('%Y-%m-%d %H:%M:%S')  # arrival time
+      db_pkt.time).strftime('%Y-%m-%d %H:%M:%S')  # arrival time
   db_pkt.protocol = protocol
   if pkt.haslayer(IP):
     db_pkt.src_ip = pkt[IP].src
@@ -186,14 +225,13 @@ def add_pkt_to_db(db_pkt: DbPacket):
   result = db_cursor.execute(insert_stmt, data)
   # print(f"db result {result}, {db_cursor.lastrowid}")
   db_conn.commit()
-  # db_conn.rollback()
 
 
 def process_pkt(pkt):
   try:
     db_pkt = parse_pkt(pkt)
-    add_pkt_to_db(db_pkt)
-    print(".", end='')
+    if db_pkt is not None:
+      local_cache.add_packet(db_pkt)
   except Exception as e:
     error_file.write(f"Error: {e}, packet: {pkt.summary()}\n\n")
     traceback.print_exc(file=error_file)
@@ -208,4 +246,3 @@ try:
 except Exception as e:
   error_file.write(f"Error: {e}")
   traceback.print_exc(file=error_file)
-

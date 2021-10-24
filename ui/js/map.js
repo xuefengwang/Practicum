@@ -104,7 +104,7 @@ function updateDetailList(data) {
 function updateSummaryList(data, duration) {
   d3.select("#list-title").attr("colspan", "3").text(`Number of packets in the last ${duration} hour(s) for all devices by location`)
   d3.select("#list-column").selectAll("th").remove();
-  d3.select("#list-column").html("<th>Location</th><th>Coordinate</th><th>Packets</th>");
+  d3.select("#list-column").html("<th>Location</th><th>Coordinate</th><th>Size</th>");
   const listBody = d3.select("#list-body");
   listBody.selectAll("tr").remove();
   listBody.selectAll("tr")
@@ -113,6 +113,37 @@ function updateSummaryList(data, duration) {
     .append("tr")
     .html(d => {
       return `<td>${d.city}, ${d.state_province}, ${d.country_code} ${d.zip}</td>
-            <td>(${d.latitude}, ${d.longitude})</td><td>${d.sum}</td>`;
+            <td>(${d.latitude}, ${d.longitude})</td><td>${humanFileSize(d.total_size)}</td>`;
     });
+}
+
+/**
+ * https://stackoverflow.com/questions/10420352/converting-file-size-in-bytes-to-human-readable-string/10420404
+ * Format bytes as human-readable text.
+ *
+ * @param bytes Number of bytes.
+ * @param si True to use metric (SI) units, aka powers of 1000. False to use binary (IEC), aka powers of 1024.
+ * @param dp Number of decimal places to display.
+ *
+ * @return Formatted string.
+ */
+function humanFileSize(bytes, si=false, dp=1) {
+  const thresh = si ? 1000 : 1024;
+
+  if (Math.abs(bytes) < thresh) {
+    return bytes + ' B';
+  }
+
+  const units = si
+    ? ['kB', 'MB', 'GB', 'TB', 'PB', 'EB', 'ZB', 'YB']
+    : ['KiB', 'MiB', 'GiB', 'TiB', 'PiB', 'EiB', 'ZiB', 'YiB'];
+  let u = -1;
+  const r = 10**dp;
+
+  do {
+    bytes /= thresh;
+    ++u;
+  } while (Math.round(Math.abs(bytes) * r) / r >= thresh && u < units.length - 1);
+
+  return bytes.toFixed(dp) + ' ' + units[u];
 }
