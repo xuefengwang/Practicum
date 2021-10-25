@@ -10,6 +10,13 @@ import time
 import ipaddress
 load_layer("http")
 
+log_file = open("console.log", "w")
+
+
+def log(msg):
+  log_file.write(f"{datetime.utcnow()} - {msg}\n")
+  log_file.flush()
+
 
 class DbPacket:
   def __init__(self) -> None:
@@ -50,16 +57,16 @@ class LocalCache:
       found = False
       for p in self.packets:
         if p.protocol == pkt.protocol and p.src_ip == pkt.src_ip and p.dst_ip == pkt.dst_ip:
-          # print(f"same src, dst, and protocol, {pkt}, {p}")
+          # log(f"same src, dst, and protocol, {pkt}, {p}")
           found = True
           p.size += pkt.size
-          # print(f"new size: ${p}")
+          # log(f"new size: ${p}")
           break
       if not found:
         self.packets.append(pkt)
     else:
-      print(f"flush {pkt.time}, {self.time}, {len(self.packets)}")
-      print(".", end='')
+      log(f"flush {pkt.time}, {self.time}, {len(self.packets)}")
+      log(".")
       for p in self.packets:
         add_pkt_to_db(p)
       self.time = pkt.time
@@ -72,7 +79,6 @@ class LocalCache:
 HOME = str(Path.home())
 SKIPPED_PCAP = "skipped.pcap"
 db_conn = None
-error_file = open("error.log", "w")
 local_cache = LocalCache()
 
 
@@ -82,7 +88,7 @@ def setup():
   config.read(os.path.join(HOME, "packet_parsing.ini"))
   db_config = dict(config.items('Database'))
   db_conn = mysql.connector.connect(**db_config)
-  print(f"db conn: {db_conn.connection_id}")
+  log(f"db conn: {db_conn.connection_id}")
 
 
 def create_pkt(pkt, protocol):
@@ -102,9 +108,9 @@ def create_pkt(pkt, protocol):
 
 def parse_pkt(pkt):
   db_pkt = None
-  # print(f"pkt: {pkt.summary()}")
+  # log(f"pkt: {pkt.summary()}")
   if pkt.haslayer(DNS):
-    # print(f"DNS: {pkt[DNS].show()}")
+    # log(f"DNS: {pkt[DNS].show()}")
     db_pkt = create_pkt(pkt, 'DNS')
     dns = pkt[DNS]
     if dns.qr == 1:       # DNS answer
@@ -116,7 +122,7 @@ def parse_pkt(pkt):
       db_pkt.payload = payload
     elif dns.qr == 0:     # DNS question
       db_pkt.payload = dns[DNSQR].qname
-    # print(f"{db_pkt}")
+    # log(f"{db_pkt}")
   elif pkt.haslayer(ARP):
     db_pkt = create_pkt(pkt, "ARP")
     arp = pkt[ARP]
@@ -126,15 +132,15 @@ def parse_pkt(pkt):
     elif arp.op == 2:
       payload = arp.psrc + " is at " + arp.hwsrc
     else:
-      print("Error: unsupported arp opcode")
+      log("Error: unsupported arp opcode")
     db_pkt.payload = payload
   else:
     # skip internal chat
     if pkt.haslayer(IP) and ipaddress.IPv4Address(pkt[IP].src).is_private and ipaddress.IPv4Address(pkt[IP].dst).is_private:
-      # print("local chat, skipped")
+      # log("local chat, skipped")
       pass
     elif pkt.haslayer(TCP):
-      # print("TCP")
+      # log("TCP")
       protocol = "TCP"
       if pkt[TCP].sport == 443 or pkt[TCP].dport == 443:
         protocol = "TLS"
@@ -144,25 +150,25 @@ def parse_pkt(pkt):
       db_pkt.src_port = pkt[TCP].sport
       db_pkt.dst_port = pkt[TCP].dport
       if pkt.haslayer(HTTP):
-        db_pkt.payload = raw(pkt[HTTP]).decode('utf-8')
+        db_pkt.payload = bytes_hex(pkt[HTTP])
       elif pkt.haslayer(Raw):
         db_pkt.payload = str(pkt[Raw].load)
     elif pkt.haslayer(UDP):
-      # print("UDP")
+      # log("UDP")
       db_pkt = create_pkt(pkt, 'UDP')
       db_pkt.src_port = pkt[UDP].sport
       db_pkt.dst_port = pkt[UDP].dport
       if pkt.haslayer(Raw):
         db_pkt.payload = str(pkt[Raw].load)
     else:
-      print(f"Another protocol: {pkt.show()}")
+      log(f"Another protocol: {pkt.show()}")
       wrpcap(SKIPPED_PCAP, pkt, append=True)
       pass
   return db_pkt
 
 
 def get_ip_coord(ip_address, ip_number, db_cursor):
-  # print(f"get_ip_coord: {ip_address}")
+  # log(f"get_ip_coord: {ip_address}")
   # check if it has already been looked up
   select_stmt = (
       "SELECT id FROM ip_coordinate "
@@ -178,7 +184,7 @@ def get_ip_coord(ip_address, ip_number, db_cursor):
     db_cursor.execute(select_stmt, (ip_number, ip_number))
     lat_long = db_cursor.fetchone()
     if lat_long == None:
-      error_file.write(f"Couldn't find coordinate for ip: {ip_address}.\n")
+      log(f"ERROR: Couldn't find coordinate for ip: {ip_address}.")
     else:
       insert_stmt = (
           "INSERT INTO ip_coordinate (ip_address, latitude, longitude, ip_location_id) "
@@ -223,7 +229,7 @@ def add_pkt_to_db(db_pkt: DbPacket):
   data = (db_pkt.atime, db_pkt.protocol, db_pkt.src_ip, src_ip_number, src_ip_coord_id, db_pkt.src_port, db_pkt.src_mac,
           db_pkt.dst_ip, dst_ip_number, dst_ip_coord_id, db_pkt.dst_port, db_pkt.dst_mac, db_pkt.size, db_payload)
   result = db_cursor.execute(insert_stmt, data)
-  # print(f"db result {result}, {db_cursor.lastrowid}")
+  # log(f"db result {result}, {db_cursor.lastrowid}")
   db_conn.commit()
 
 
@@ -233,16 +239,16 @@ def process_pkt(pkt):
     if db_pkt is not None:
       local_cache.add_packet(db_pkt)
   except Exception as e:
-    error_file.write(f"Error: {e}, packet: {pkt.summary()}\n\n")
-    traceback.print_exc(file=error_file)
+    log(f"ERROR: {e}, packet: {pkt.summary()}")
+    traceback.print_exc(file=log_file)
     wrpcap(SKIPPED_PCAP, pkt, append=True)
 
 
 setup()
 
-print("Start sniffing on wlan0...")
+log("Start sniffing on wlan0...")
 try:
   sniff(iface='wlan0', prn=process_pkt)
 except Exception as e:
-  error_file.write(f"Error: {e}")
-  traceback.print_exc(file=error_file)
+  log(f"ERROR: {e}")
+  traceback.print_exc(file=log_file)
