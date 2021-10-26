@@ -32,13 +32,15 @@ d3.json("world-110m.json", (err, topoJson) => {
     .style("stroke-width", "1")
     .style("fill", "rgb(213, 222, 217)");
 
-  drawMap(1); // by default 1 hour
+  drawMap(1, null); // by default 1 hour
 });
 
 d3.json(API_SERVICE + "/devices", data => {
   const devices = [{id: 0, name: "ALL"}];
   devices.push(...data.devices);
   console.log("devices", devices);
+  window.iot_state.device_ip = null;
+  window.iot_state.devices = devices;
   d3.select(".ui.dropdown > .menu")
     .selectAll("div")
     .data(devices, d => d.id)
@@ -47,6 +49,14 @@ d3.json(API_SERVICE + "/devices", data => {
     .attr("class", "item")
     .attr("data-value", d => d.ip_addr)
     .text(d => d.ip_addr || d.name);
+
+  // add event listener for dropdown
+  $("#device_list > div.item").on("click", e => {
+    const ip = e.currentTarget.getAttribute("data-value")
+    console.log("selected device:", ip);
+    window.iot_state.device_ip = ip;
+    drawMap(window.iot_state.duration, ip);
+  });
 });
 
 setup();
@@ -60,12 +70,12 @@ function setup() {
     const duration = e.currentTarget.value;
     console.log("change duration:", duration);
     window.iot_state.duration = duration;
-    drawMap(duration);
+    drawMap(duration, window.iot_state.device_ip);
   });
 }
 
-function drawMap(duration) {
-  d3.json(API_SERVICE + `/packets?duration=${duration}`, d => {
+function drawMap(duration, device_ip) {
+  d3.json(API_SERVICE + `/packets?duration=${duration}&device_ip=${device_ip || ''}`, d => {
     const locs = d.packets.list.map(ll => [[ll.longitude, ll.latitude, ll.city, ll.state_province, ll.country_code, ll.zip]]);
     console.log(locs.join(',\t'));
     window.iot_state.locs = d.packets.list;
@@ -89,9 +99,10 @@ function drawMap(duration) {
       let lat = e.currentTarget.getAttribute("lat");
       let lng = e.currentTarget.getAttribute("lng");
       window.iot_state.coord = {lat: lat, lng: lng};
+      const dur = window.iot_state.duration || '';
+      const ip = window.iot_state.device_ip || '';
       console.log("get loc:", lat, lng);
-      d3.json(API_SERVICE + `/loc?lat=${lat}&lng=${lng}&duration=${window.iot_state.duration}`, d => {
-
+      d3.json(API_SERVICE + `/loc?lat=${lat}&lng=${lng}&duration=${dur}&device_ip=${ip}`, d => {
         console.log("packet at loc:", d);
         updateDetailList(d.loc_packets);
       });
@@ -107,7 +118,7 @@ function updateDetailList(data) {
   d3.select("#list-title").attr("colspan", "4").text(`Packets in last ${window.iot_state.duration} hour(s) for ${selectedLoc.city}, 
     ${selectedLoc.state_province}, ${selectedLoc.country_code}`);
   d3.select("#list-column").selectAll("th").remove();
-  d3.select("#list-column").html("<th>Time</th><th>Source</th><th>Destination</th><th>Size</th>");
+  d3.select("#list-column").html("<th>Time</th><th>Protocol</th><th>Source</th><th>Destination</th><th>Size</th>");
   const listBody = d3.select("#list-body");
   listBody.selectAll("tr").remove();
   listBody.selectAll("tr")
@@ -115,12 +126,17 @@ function updateDetailList(data) {
     .enter()
     .append("tr")
     .html(d => {
-      return `<td>${d.packet_time}</td><td>${d.src_ip}</td><td>${d.dst_ip}</td><td>${d.size}</td>`;
+      return `<td>${d.packet_time}</td><td>${d.protocol}</td><td>${d.src_ip}</td><td>${d.dst_ip}</td><td>${d.size}</td>`;
     });
 }
 
 function updateSummaryList(data, duration) {
-  d3.select("#list-title").attr("colspan", "3").text(`Number of packets in the last ${duration} hour(s) for all devices by location`)
+  let devices = "all devices";
+  if (window.iot_state.device_ip) {
+    devices = window.iot_state.device_ip;
+  }
+  d3.select("#list-title").attr("colspan", "3").html(
+    `<span>Number of packets in the last <span class="duration">${duration} hours</span> for <span class="device">${devices}</span> by location</span>`)
   d3.select("#list-column").selectAll("th").remove();
   d3.select("#list-column").html("<th>Location</th><th>Coordinate</th><th>Size</th>");
   const listBody = d3.select("#list-body");

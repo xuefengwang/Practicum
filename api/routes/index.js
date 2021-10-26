@@ -1,10 +1,18 @@
 const express = require('express');
 const router = express.Router();
 const async = require('async');
+const net = require('net')
 
 router.get('/packets', function (req, res, next) {
   const duration = getDuration(req.query.duration);
-  console.log(`packets for last ${duration} hour`);
+  let deviceIP = req.query.device_ip;
+  let sqlParams = [duration, duration];
+  let deviceSql = '';
+  if (net.isIPv4(deviceIP)) {
+    deviceSql = ' AND (p.src_ip = ? OR p.dst_ip = ?) ';
+    sqlParams = [duration, deviceIP, deviceIP, duration, deviceIP, deviceIP];
+  }
+  console.log(`packets for last ${duration} hour, for device: ${deviceIP}`);
   
   let packets;
   async.series({
@@ -13,13 +21,13 @@ router.get('/packets', function (req, res, next) {
       SELECT u.latitude, u.longitude, u.city, u.country_code, u.state_province, u.zip, SUM(size) total_size FROM
         (SELECT SUM(size) size, ic.latitude, ic.longitude, iloc.city, iloc.state_province, iloc.country_code, iloc.zip FROM packet p 
           JOIN ip_coordinate ic ON p.src_ip_coord_id = ic.id JOIN ip_location iloc ON ic.ip_location_id = iloc.id
-          WHERE p.packet_time > NOW() - INTERVAL ? HOUR AND protocol != 'ARP' GROUP BY ic.latitude, ic.longitude
+          WHERE p.packet_time > NOW() - INTERVAL ? HOUR AND protocol != 'ARP' ${deviceSql} GROUP BY ic.latitude, ic.longitude
           UNION
           SELECT SUM(size) size, ic.latitude, ic.longitude, iloc.city, iloc.state_province, iloc.country_code, iloc.zip FROM packet p 
           JOIN ip_coordinate ic ON p.dst_ip_coord_id = ic.id JOIN ip_location iloc ON ic.ip_location_id = iloc.id
-          WHERE packet_time > NOW() - INTERVAL ? HOUR AND protocol != 'ARP' GROUP BY ic.latitude, ic.longitude
+          WHERE packet_time > NOW() - INTERVAL ? HOUR AND protocol != 'ARP' ${deviceSql} GROUP BY ic.latitude, ic.longitude
         ) u
-      GROUP BY u.latitude, u.longitude ORDER BY total_size DESC`, [duration, duration], (err, results) => {
+      GROUP BY u.latitude, u.longitude ORDER BY total_size DESC`, sqlParams, (err, results) => {
         if (err) return cb(err);
 
         packets = results.filter(a => a.latitude !== '0.000000' || a.longitude !== '0.000000');
@@ -41,17 +49,25 @@ router.get('/loc', (req, res, next) => {
     return res.json({error: "invalid latitude or longitude"});
   }
   const duration = getDuration(req.query.duration);
+  let deviceSql = '';
+  let sqlParams = [req.query.lat, req.query.lng, duration, req.query.lat, req.query.lng, duration];
+  const deviceIP = req.query.device_ip;
+  if (net.isIPv4(deviceIP)) {
+    deviceSql = ' AND (p.src_ip = ? OR p.dst_ip = ?) ';
+    sqlParams = [req.query.lat, req.query.lng, duration, deviceIP, deviceIP,
+      req.query.lat, req.query.lng, duration, deviceIP, deviceIP];
+  }
   req.db.query(`
   SELECT p.id, p.packet_time, p.protocol, p.src_ip, p.src_mac, p.dst_ip, p.dst_mac, p.size 
     FROM packet p JOIN 
     ( SELECT id FROM ip_coordinate WHERE latitude = ? AND longitude = ?) ic ON p.dst_ip_coord_id = ic.id 
-    WHERE p.packet_time > NOW() - INTERVAL ? HOUR AND p.protocol != 'ARP' 
+    WHERE p.packet_time > NOW() - INTERVAL ? HOUR AND p.protocol != 'ARP' ${deviceSql}
   UNION 
   SELECT p.id, p.packet_time, p.protocol, p.src_ip, p.src_mac, p.dst_ip, p.dst_mac, p.size
     FROM packet p JOIN 
     ( SELECT id FROM ip_coordinate WHERE latitude = ? AND longitude = ?) ic ON p.src_ip_coord_id = ic.id 
-    WHERE p.packet_time > NOW() - INTERVAL ? HOUR AND p.protocol != 'ARP' 
-  ORDER BY id LIMIT 50;`, [req.query.lat, req.query.lng, duration, req.query.lat, req.query.lng, duration], (err, results) => {
+    WHERE p.packet_time > NOW() - INTERVAL ? HOUR AND p.protocol != 'ARP' ${deviceSql}
+  ORDER BY id LIMIT 50;`, sqlParams, (err, results) => {
     if (err) return next(err);
 
     res.json({loc_packets: results});

@@ -7,3 +7,6 @@ body {
 circle:hover {
     cursor: pointer;
 }
+span.device, span.duration {
+    color: #0ea432;
+}
