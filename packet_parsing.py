@@ -41,8 +41,8 @@ class DbPacket:
     return f"{self.atime} [{self.size} bytes]: {self.protocol} - {self.src_mac} => {self.dst_mac}, {self.src_ip} => {self.dst_ip}, {self.payload}"
 
 
-# a local cache to aggregate data, for every 10 seconds, same src and dst ip will consolidate with bytes accumulated
-class LocalCache:
+# a local cache to aggregate data, for every 10 seconds, same src, dst ip and protocol will consolidate with bytes accumulated
+class PacketCache:
   def __init__(self) -> None:
     self.packets = []
     self.time = None
@@ -53,7 +53,7 @@ class LocalCache:
     if self.time is None:
       self.time = pkt.time
       self.packets.append(pkt)
-    elif pkt.time - self.time < 10:
+    elif pkt.time - self.time < 10:   # flush every 10 seconds
       found = False
       for p in self.packets:
         if p.protocol == pkt.protocol and p.src_ip == pkt.src_ip and p.dst_ip == pkt.dst_ip:
@@ -78,8 +78,23 @@ class LocalCache:
 
 HOME = str(Path.home())
 SKIPPED_PCAP = "skipped.pcap"
+LOCAL_IP_REGEX = "10.20.1.[0-9]{1,3}"
 db_conn = None
-local_cache = LocalCache()
+local_cache = PacketCache()
+device_cache = []  # list of device ips
+
+
+def load_device_cache():
+  db_cursor = db_conn.cursor()
+  select_stmt = (
+      "SELECT ip_addr FROM device ORDER BY id"
+  )
+  db_cursor.execute(select_stmt)
+  ips = db_cursor.fetchall()
+  for ip in ips:
+    device_cache.append(ip[0])
+  db_cursor.close()
+  log(f"device ips {device_cache}")
 
 
 def setup():
@@ -89,6 +104,20 @@ def setup():
   db_config = dict(config.items('Database'))
   db_conn = mysql.connector.connect(**db_config)
   log(f"db conn: {db_conn.connection_id}")
+  load_device_cache()
+
+
+def add_device(ip, pkt):
+  if ip not in device_cache:
+    device_cache.append(ip)
+    db_cursor = db_conn.cursor()
+    insert_stmt = (
+        "INSERT INTO device (mac_addr, ip_addr) "
+        "VALUES (%s, %s)"
+    )
+    db_cursor.execute(insert_stmt, (pkt[Ether].src, ip))
+    db_conn.commit()
+    db_cursor.close()
 
 
 def create_pkt(pkt, protocol):
@@ -109,6 +138,8 @@ def create_pkt(pkt, protocol):
 def parse_pkt(pkt):
   db_pkt = None
   # log(f"pkt: {pkt.summary()}")
+  if pkt.haslayer(IP) and re.match(LOCAL_IP_REGEX, pkt[IP].src):
+    add_device(pkt[IP].src, pkt)
   if pkt.haslayer(DNS):
     # log(f"DNS: {pkt[DNS].show()}")
     db_pkt = create_pkt(pkt, 'DNS')
@@ -161,7 +192,7 @@ def parse_pkt(pkt):
       if pkt.haslayer(Raw):
         db_pkt.payload = str(pkt[Raw].load)
     else:
-      log(f"Another protocol: {pkt.show()}")
+      log(f"Another protocol: {pkt.summary()}")
       wrpcap(SKIPPED_PCAP, pkt, append=True)
       pass
   return db_pkt
@@ -231,6 +262,7 @@ def add_pkt_to_db(db_pkt: DbPacket):
   result = db_cursor.execute(insert_stmt, data)
   # log(f"db result {result}, {db_cursor.lastrowid}")
   db_conn.commit()
+  db_cursor.close()
 
 
 def process_pkt(pkt):

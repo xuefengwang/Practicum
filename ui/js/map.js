@@ -35,10 +35,25 @@ d3.json("world-110m.json", (err, topoJson) => {
   drawMap(1); // by default 1 hour
 });
 
+d3.json(API_SERVICE + "/devices", data => {
+  const devices = [{id: 0, name: "ALL"}];
+  devices.push(...data.devices);
+  console.log("devices", devices);
+  d3.select(".ui.dropdown > .menu")
+    .selectAll("div")
+    .data(devices, d => d.id)
+    .enter()
+    .append("div")
+    .attr("class", "item")
+    .attr("data-value", d => d.ip_addr)
+    .text(d => d.ip_addr || d.name);
+});
+
 setup();
 
 
 function setup() {
+  $('.ui.dropdown').dropdown();
   $("#duration-list > .duration").on("click", e => {
     $('#duration-list > .duration.positive').removeClass('positive');
     e.currentTarget.classList.add('positive');
@@ -51,7 +66,7 @@ function setup() {
 
 function drawMap(duration) {
   d3.json(API_SERVICE + `/packets?duration=${duration}`, d => {
-    const locs = d.packets.list.map(ll => [[ll.longitude, ll.latitude]]);
+    const locs = d.packets.list.map(ll => [[ll.longitude, ll.latitude, ll.city, ll.state_province, ll.country_code, ll.zip]]);
     console.log(locs.join(',\t'));
     window.iot_state.locs = d.packets.list;
     svg.selectAll("circle").remove();
@@ -64,8 +79,11 @@ function drawMap(duration) {
       .attr("r", "5")
       .attr("lat", d => d[0][1])
       .attr("lng", d => d[0][0])
+      .attr("data-content", d => `${d[0][2]}, ${d[0][3]}, ${d[0][4]} ${d[0][5]}`)
       .style("fill", "rgb(217,91,67)")
       .style("opacity", 0.85);
+
+    $("circle").popup();
 
     $("circle").on("click", e => {
       let lat = e.currentTarget.getAttribute("lat");

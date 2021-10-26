@@ -58,6 +58,15 @@ router.get('/loc', (req, res, next) => {
   });
 });
 
+router.get("/devices", (req, res, next) => {
+  req.db.query('SELECT id, name, ip_addr, mac_addr FROM device ORDER BY id', (err, rows) => {
+    if (err) return next(err);
+    console.log("devices", rows.length);
+
+    return res.json({devices: rows});
+  })
+});
+
 function getDuration(param) {
   let duration = param;
   if (!duration) {
