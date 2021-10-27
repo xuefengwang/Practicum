@@ -48,7 +48,7 @@ d3.json(API_SERVICE + "/devices", data => {
     .append("div")
     .attr("class", "item")
     .attr("data-value", d => d.ip_addr)
-    .text(d => d.ip_addr || d.name);
+    .text(d => d.name);
 
   // add event listener for dropdown
   $("#device_list > div.item").on("click", e => {
@@ -57,6 +57,14 @@ d3.json(API_SERVICE + "/devices", data => {
     window.iot_state.device_ip = ip;
     drawMap(window.iot_state.duration, ip);
   });
+
+  // populate device edit window
+  d3.select("#device-input")
+    .selectAll("tr")
+    .data(devices.filter(d => !!d.ip_addr))
+    .enter()
+    .append("tr")
+    .html(d => `<tr><td>${d.ip_addr}</td><td><div class="ui input fluid"><input type="text" value="${d.name || ''}"></div></td></tr>`);
 });
 
 setup();
@@ -71,6 +79,28 @@ function setup() {
     console.log("change duration:", duration);
     window.iot_state.duration = duration;
     drawMap(duration, window.iot_state.device_ip);
+  });
+  $("#manage-device").on("click", e => {
+    $('.ui.modal').modal('show');
+  });
+  $("#edit-ok").on("click", e => {
+    $("#device-input > tr").each((idx, element) => {
+      let ip, name;
+      $("td", element).each((i, td) => {
+        if (i === 0) ip = $(td).text();
+        if (i === 1) name = $("input", td).val();
+      });
+      const dev = window.iot_state.devices.filter(d => d.ip_addr === ip)[0];
+      dev.name = name;
+    });
+    // update database
+    const postData = {};
+    window.iot_state.devices.forEach(d => {
+      if (d.ip_addr) postData[d.ip_addr] = d.name;
+    });
+    $.post(API_SERVICE + '/devices', postData, data => {
+      console.log(data);
+    });
   });
 }
 

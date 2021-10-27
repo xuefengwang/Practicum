@@ -38,6 +38,9 @@
                             </div>
                         </div>
                         <div class="row" style="text-align: right; margin-top: 10px; margin-bottom: 10px;">
+                            <button id="manage-device" class="ui basic positive button" style="margin-right: 410px;">
+                                Device Name
+                            </button>
                             <span>IoT Device: </span>
                             <div class="ui selection dropdown" style="margin-right: 3px;">
                                 <input type="hidden" name="gender">
@@ -57,7 +60,9 @@
                     <table id="list" class="ui celled very basic table">
                         <thead>
                         <tr>
-                            <th id="list-title" colspan="3" class="center aligned">Number of packets in the last 1 hour for all devices by location</th>
+                            <th id="list-title" colspan="3" class="center aligned">Number of packets in the last 1 hour
+                                for all devices by location
+                            </th>
                         </tr>
                         <tr id="list-column"></tr>
                         </thead>
@@ -66,6 +71,28 @@
                 </div>
             </div>
         </div>
+    </div>
+</div>
+<div id="device-edit" class="ui modal">
+    <div class="header">IoT Devices</div>
+    <div class="content">
+        <table class="ui celled striped table">
+            <thead>
+            <tr>
+                <th colspan="2">Create or edit the name for the corresponding device based on IP address</th>
+            </tr>
+            <tr>
+                <th style="width: 35%;">IP Address</th>
+                <th>Name</th>
+            </tr>
+            </thead>
+            <tbody id="device-input">
+            </tbody>
+        </table>
+    </div>
+    <div class="actions">
+        <div class="ui black deny button">Cancel</div>
+        <div id="edit-ok" class="ui positive right button">Okay</div>
     </div>
 </div>
 </body>

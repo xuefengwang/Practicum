@@ -83,6 +83,23 @@ router.get("/devices", (req, res, next) => {
   })
 });
 
+router.post("/devices", (req, res, next) => {
+  const devices = req.body;
+  console.log("update device names", devices);
+  async.eachSeries(Object.keys(devices), (dev, cb) => {
+    req.db.query('UPDATE device SET name = ? WHERE ip_addr = ?', [devices[dev], dev], (err, result) => {
+      if (err) return cb(err);
+
+      console.log('updated', dev, result.affectedRows);
+      cb();
+    });
+  }, (err, results) => {
+    if (err) return next(err);
+
+    res.json({msg: "ok"});
+  });
+});
+
 function getDuration(param) {
   let duration = param;
   if (!duration) {
