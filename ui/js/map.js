@@ -142,6 +142,8 @@ function drawMap(duration, device_ip) {
   });
 }
 
+const IoTIPRegex = new RegExp("^10\.20\.1\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$");
+
 function updateDetailList(data) {
   const coord = window.iot_state.coord;
   const selectedLoc = window.iot_state.locs.filter(d => d.latitude === coord.lat && d.longitude === coord.lng)[0];
@@ -149,6 +151,21 @@ function updateDetailList(data) {
     ${selectedLoc.state_province}, ${selectedLoc.country_code}`);
   d3.select("#list-column").selectAll("th").remove();
   d3.select("#list-column").html("<th>Time</th><th>Protocol</th><th>Source</th><th>Destination</th><th>Size</th>");
+
+  // map iot device ip to name
+  const devices = iot_state.devices;
+  for (let i = 0; i < data.length; i++) {
+    for (let j = 0; j < devices.length; j++) {
+      if (IoTIPRegex.test(data[i].src_ip) && data[i].src_ip === devices[j].ip_addr) {
+        data[i].src_ip = devices[j].name;
+        break;
+      } else if (IoTIPRegex.test(data[i].dst_ip) && data[i].dst_ip === devices[j].ip_addr) {
+        data[i].dst_ip = devices[j].name;
+        break;
+      }
+    }
+  }
+
   const listBody = d3.select("#list-body");
   listBody.selectAll("tr").remove();
   listBody.selectAll("tr")
