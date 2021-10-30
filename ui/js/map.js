@@ -180,7 +180,11 @@ function updateDetailList(data) {
 function updateSummaryList(data, duration) {
   let devices = "all devices";
   if (window.iot_state.device_ip) {
-    devices = window.iot_state.device_ip;
+    for (let i = 0; i < iot_state.devices.length; i++) {
+      if (iot_state.devices[i].ip_addr === iot_state.device_ip) {
+        devices = iot_state.devices[i].name;
+      }
+    }
   }
   d3.select("#list-title").attr("colspan", "3").html(
     `<span>Number of packets in the last <span class="duration">${duration} hours</span> for <span class="device">${devices}</span> by location</span>`)
