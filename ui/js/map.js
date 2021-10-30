@@ -67,8 +67,11 @@ d3.json(API_SERVICE + "/devices", data => {
     .html(d => `<tr><td>${d.ip_addr}</td><td><div class="ui input fluid"><input type="text" value="${d.name || ''}"></div></td></tr>`);
 });
 
-setup();
+d3.json(API_SERVICE + "/dns", data => {
+  window.iot_state.dns = data.dns;
+});
 
+setup();
 
 function setup() {
   $('.ui.dropdown').dropdown();
@@ -147,7 +150,7 @@ const IoTIPRegex = new RegExp("^10\.20\.1\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?
 function updateDetailList(data) {
   const coord = window.iot_state.coord;
   const selectedLoc = window.iot_state.locs.filter(d => d.latitude === coord.lat && d.longitude === coord.lng)[0];
-  d3.select("#list-title").attr("colspan", "4").text(`Packets in last ${window.iot_state.duration} hour(s) for ${selectedLoc.city}, 
+  d3.select("#list-title").attr("colspan", "5").text(`Packets in last ${window.iot_state.duration} hour(s) for ${selectedLoc.city}, 
     ${selectedLoc.state_province}, ${selectedLoc.country_code}`);
   d3.select("#list-column").selectAll("th").remove();
   d3.select("#list-column").html("<th>Time</th><th>Protocol</th><th>Source</th><th>Destination</th><th>Size</th>");
@@ -158,9 +161,11 @@ function updateDetailList(data) {
     for (let j = 0; j < devices.length; j++) {
       if (IoTIPRegex.test(data[i].src_ip) && data[i].src_ip === devices[j].ip_addr) {
         data[i].src_ip = devices[j].name;
+        data[i].dst_ip = dnsMap(data[i].dst_ip);
         break;
       } else if (IoTIPRegex.test(data[i].dst_ip) && data[i].dst_ip === devices[j].ip_addr) {
         data[i].dst_ip = devices[j].name;
+        data[i].src_ip = dnsMap(data[i].src_ip);
         break;
       }
     }
@@ -175,6 +180,15 @@ function updateDetailList(data) {
     .html(d => {
       return `<td>${d.packet_time}</td><td>${d.protocol}</td><td>${d.src_ip}</td><td>${d.dst_ip}</td><td>${d.size}</td>`;
     });
+}
+
+function dnsMap(ip) {
+  for (let i = 0; i < iot_state.dns.length; i++) {
+    if (iot_state.dns[i].ip === ip) {
+      return iot_state.dns[i].name;
+    }
+  }
+  return ip;
 }
 
 function updateSummaryList(data, duration) {

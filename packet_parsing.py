@@ -276,8 +276,8 @@ def parse_dns_answer(dns_answer):
       if n:
         ip = n.group(1)
       data.append((ip, name))
-      print(mapping)
-  print(data)
+      # print(mapping)
+  log(f"dns entries: {data}")
   return data
 
 

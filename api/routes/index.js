@@ -111,4 +111,13 @@ function getDuration(param) {
   return duration;
 }
 
+router.get("/dns", (req, res, next) => {
+  console.log("load dns entries");
+  req.db.query("SELECT ip, name FROM dns ORDER BY ip", (err, rows) => {
+    if (err) return next(err);
+
+    return res.json({dns: rows});
+  });
+});
+
 module.exports = router;
