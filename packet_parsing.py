@@ -171,7 +171,6 @@ def parse_pkt(pkt):
       # log("local chat, skipped")
       pass
     elif pkt.haslayer(TCP):
-      # log("TCP")
       protocol = "TCP"
       if pkt[TCP].sport == 443 or pkt[TCP].dport == 443:
         protocol = "TLS"
@@ -185,7 +184,6 @@ def parse_pkt(pkt):
       elif pkt.haslayer(Raw):
         db_pkt.payload = str(pkt[Raw].load)
     elif pkt.haslayer(UDP):
-      # log("UDP")
       db_pkt = create_pkt(pkt, 'UDP')
       db_pkt.src_port = pkt[UDP].sport
       db_pkt.dst_port = pkt[UDP].dport
@@ -265,11 +263,45 @@ def add_pkt_to_db(db_pkt: DbPacket):
   db_cursor.close()
 
 
+def parse_dns_answer(dns_answer):
+  data = []
+  entries = dns_answer.rstrip().split(";")
+  for entry in entries:
+    mapping = entry.split(",")
+    if len(mapping) == 2:
+      m = re.search("\'(.*)\'", mapping[0])
+      if m:
+        name = m.group(1)
+      n = re.search("\'(.*)\'", mapping[1])
+      if n:
+        ip = n.group(1)
+      data.append((ip, name))
+      print(mapping)
+  print(data)
+  return data
+
+
+def add_dns(pkt):
+  if pkt.src_ip == '10.20.1.1' and pkt.payload != '':   # DNS answer
+    data = parse_dns_answer(pkt.payload)
+
+    insert_stmt = (
+        "INSERT IGNORE INTO dns (ip, name) "
+        "VALUES (%s, %s)"
+    )
+    db_cursor = db_conn.cursor()
+    db_cursor.executemany(insert_stmt, data)
+    db_conn.commit()
+    db_cursor.close()
+
+
 def process_pkt(pkt):
   try:
     db_pkt = parse_pkt(pkt)
     if db_pkt is not None:
       local_cache.add_packet(db_pkt)
+      if db_pkt.protocol == 'DNS':
+        add_dns(db_pkt)
   except Exception as e:
     log(f"ERROR: {e}, packet: {pkt.summary()}")
     traceback.print_exc(file=log_file)
