@@ -31,10 +31,21 @@
                         <div class="row" style="text-align: right;">
                             <div id="duration-list">
                                 <span>Duration: last </span>
-                                <button class="ui basic positive button fixed_button duration" value="1">1 hour</button>
-                                <button class="ui basic button fixed_button duration" value="6">6 hour</button>
-                                <button class="ui basic button fixed_button duration" value="24">1 day</button>
-                                <button class="ui basic button fixed_button duration" value="168">1 week</button>
+                                <button class="ui basic positive button fixed_button duration" value="60">1 hour</button>
+                                <button class="ui basic button fixed_button duration" value="360">6 hour</button>
+                                <button class="ui basic button fixed_button duration" value="1440">1 day</button>
+                                <button class="ui basic button fixed_button duration" value="10080">1 week</button>
+                                <div id="dur-select" class="ui action input" style="font-size: 0.95em;">
+                                    <input id="dur-search-input" type="text" size="3">
+                                    <select id="dur-search-select" class="ui compact selection dropdown">
+                                        <option selected="" value="hour">hour</option>
+                                        <option value="minute">minute</option>
+                                        <option value="day">day</option>
+                                    </select>
+                                    <button id="dur-search" class="ui icon button">
+                                        <i class="search icon"></i>
+                                    </button>
+                                </div>
                             </div>
                         </div>
                         <div class="row" style="text-align: right; margin-top: 10px; margin-bottom: 10px;">
@@ -42,7 +53,7 @@
                                 Device Name
                             </button>
                             <span>IoT Device: </span>
-                            <div class="ui selection dropdown" style="margin-right: 3px;">
+                            <div id="iot_dropdown" class="ui selection dropdown" style="margin-right: 3px;">
                                 <input type="hidden" name="gender">
                                 <i class="dropdown icon"></i>
                                 <div class="default text">All</div>
@@ -60,7 +71,7 @@
                     <table id="list" class="ui celled very basic table">
                         <thead>
                         <tr>
-                            <th id="list-title" colspan="3" class="center aligned">Number of packets in the last 1 hour
+                            <th id="list-title" colspan="3" class="center aligned">Number of packets in the last <span class="duration">1 hour</span>
                                 for all devices by location
                             </th>
                         </tr>

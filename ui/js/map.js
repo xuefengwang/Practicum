@@ -4,7 +4,7 @@ const API_SERVICE = "http://localhost:3000/api"
 const WIDTH = 800;
 const HEIGHT = 500;
 window.iot_state = {
-  duration: 1
+  duration: 60  // 60 minutes by default
 }
 
 // D3 Projection
@@ -32,7 +32,7 @@ d3.json("world-110m.json", (err, topoJson) => {
     .style("stroke-width", "1")
     .style("fill", "rgb(213, 222, 217)");
 
-  drawMap(1, null); // by default 1 hour
+  drawMap(60, null); // by default 1 hour
 });
 
 d3.json(API_SERVICE + "/devices", data => {
@@ -41,7 +41,7 @@ d3.json(API_SERVICE + "/devices", data => {
   console.log("devices", devices);
   window.iot_state.device_ip = null;
   window.iot_state.devices = devices;
-  d3.select(".ui.dropdown > .menu")
+  d3.select("#iot_dropdown.ui.dropdown > .menu")
     .selectAll("div")
     .data(devices, d => d.id)
     .enter()
@@ -105,12 +105,31 @@ function setup() {
       console.log(data);
     });
   });
+  $("#dur-search").on("click", e => {
+    const dur = parseInt($("#dur-search-input")[0].value);
+    const durUnit = $("#dur-search-select").find(":selected").text();
+    if (dur) {
+      $('#duration-list > .duration.positive').removeClass('positive');
+      let durMin = 0;
+      if (durUnit === 'hour') {
+        durMin = dur * 60;
+      } else if (durUnit === 'minute') {
+        durMin = dur;
+      } else if (durUnit === 'day') {
+        durMin = dur * 1440;
+      }
+      if (durMin > 0) {
+        drawMap(durMin, iot_state.device_ip);
+      }
+    }
+    console.log("search", dur, durUnit);
+  });
 }
 
 function drawMap(duration, device_ip) {
   d3.json(API_SERVICE + `/packets?duration=${duration}&device_ip=${device_ip || ''}`, d => {
     const locs = d.packets.list.map(ll => [[ll.longitude, ll.latitude, ll.city, ll.state_province, ll.country_code, ll.zip]]);
-    console.log(locs.join(',\t'));
+    // console.log(locs.join(',\t'));
     window.iot_state.locs = d.packets.list;
     svg.selectAll("circle").remove();
     svg.selectAll("circle")
@@ -191,6 +210,23 @@ function dnsMap(ip) {
   return ip;
 }
 
+function durDisplay(dur) {
+  dur = parseInt(dur);
+  if (dur === 60) {
+    return "1 hour";
+  } else if (dur === 360) {
+    return "6 hours";
+  } else if (dur === 1440) {
+    return "1 day";
+  } else if (dur === 10080) {
+    return "1 week";
+  } else {
+    const dur = parseInt($("#dur-search-input")[0].value);
+    const durUnit = $("#dur-search-select").find(":selected").text();
+    return `${dur} ${durUnit}`;
+  }
+}
+
 function updateSummaryList(data, duration) {
   let devices = "all devices";
   if (window.iot_state.device_ip) {
@@ -201,7 +237,7 @@ function updateSummaryList(data, duration) {
     }
   }
   d3.select("#list-title").attr("colspan", "3").html(
-    `<span>Number of packets in the last <span class="duration">${duration} hours</span> for <span class="device">${devices}</span> by location</span>`)
+    `<span>Number of packets in the last <span class="duration">${durDisplay(duration)}</span> for <span class="device">${devices}</span> by location</span>`)
   d3.select("#list-column").selectAll("th").remove();
   d3.select("#list-column").html("<th>Location</th><th>Coordinate</th><th>Size</th>");
   const listBody = d3.select("#list-body");

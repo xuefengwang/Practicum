@@ -21,11 +21,11 @@ router.get('/packets', function (req, res, next) {
       SELECT u.latitude, u.longitude, u.city, u.country_code, u.state_province, u.zip, SUM(size) total_size FROM
         (SELECT SUM(size) size, ic.latitude, ic.longitude, iloc.city, iloc.state_province, iloc.country_code, iloc.zip FROM packet p 
           JOIN ip_coordinate ic ON p.src_ip_coord_id = ic.id JOIN ip_location iloc ON ic.ip_location_id = iloc.id
-          WHERE p.packet_time > NOW() - INTERVAL ? HOUR AND protocol != 'ARP' ${deviceSql} GROUP BY ic.latitude, ic.longitude
+          WHERE p.packet_time > NOW() - INTERVAL ? MINUTE AND protocol != 'ARP' ${deviceSql} GROUP BY ic.latitude, ic.longitude
           UNION
           SELECT SUM(size) size, ic.latitude, ic.longitude, iloc.city, iloc.state_province, iloc.country_code, iloc.zip FROM packet p 
           JOIN ip_coordinate ic ON p.dst_ip_coord_id = ic.id JOIN ip_location iloc ON ic.ip_location_id = iloc.id
-          WHERE packet_time > NOW() - INTERVAL ? HOUR AND protocol != 'ARP' ${deviceSql} GROUP BY ic.latitude, ic.longitude
+          WHERE packet_time > NOW() - INTERVAL ? MINUTE AND protocol != 'ARP' ${deviceSql} GROUP BY ic.latitude, ic.longitude
         ) u
       GROUP BY u.latitude, u.longitude ORDER BY total_size DESC`, sqlParams, (err, results) => {
         if (err) return cb(err);
