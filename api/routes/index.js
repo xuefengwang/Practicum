@@ -12,7 +12,7 @@ router.get('/packets', function (req, res, next) {
     deviceSql = ' AND (p.src_ip = ? OR p.dst_ip = ?) ';
     sqlParams = [duration, deviceIP, deviceIP, duration, deviceIP, deviceIP];
   }
-  console.log(`packets for last ${duration} hour, for device: ${deviceIP}`);
+  console.log(`packets for last ${duration} minutes, for device: ${deviceIP}`);
   
   let packets;
   async.series({
@@ -31,7 +31,7 @@ router.get('/packets', function (req, res, next) {
         if (err) return cb(err);
 
         packets = results.filter(a => a.latitude !== '0.000000' || a.longitude !== '0.000000');
-        console.log(`For ${duration} hours, found ${packets.length} locations`);
+        console.log(`For ${duration} minutes, found ${packets.length} locations`);
         cb();
       });
     }
@@ -103,10 +103,10 @@ router.post("/devices", (req, res, next) => {
 function getDuration(param) {
   let duration = param;
   if (!duration) {
-    duration = 1;  // by default, return the last 1 hour
+    duration = 60;  // by default, return the last 1 hour
   } else {
     duration = parseInt(duration);
-    if (isNaN(duration)) duration = 1;
+    if (isNaN(duration)) duration = 60;
   }
   return duration;
 }
@@ -117,6 +117,29 @@ router.get("/dns", (req, res, next) => {
     if (err) return next(err);
 
     return res.json({dns: rows});
+  });
+});
+
+router.get("/time_size", (req, res, next) => {
+  const duration = getDuration(req.query.duration);
+  let deviceIP = req.query.device_ip;
+  let sqlParams = [duration];
+  let deviceSql = '';
+  if (net.isIPv4(deviceIP)) {
+    deviceSql = ' AND (src_ip = ? OR dst_ip = ?) ';
+    sqlParams = [duration, deviceIP, deviceIP];
+  }
+
+  console.log("time size sequence", duration);
+  req.db.query(`
+    SELECT packet_time, SUM(size) size 
+    FROM packet 
+    WHERE packet_time > now() - INTERVAL ? MINUTE AND packet_time < now() ${deviceSql}
+    GROUP BY unix_timestamp(packet_time) DIV 600
+  `, sqlParams, (err, rows) => {
+    if (err) return next(err);
+
+    res.json({time_size: rows});
   });
 });
 

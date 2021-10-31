@@ -13,10 +13,15 @@ const indexRouter = require('./routes/index');
 function setup(config, next) {
   const pool = mysql.createPool(config.datasource);
   console.log('Connect to database', config.datasource.host, config.datasource.user);
-  next(null, pool);
+  pool.query("SET time_zone='+0:00';", (err, result) => {
+    if (err) return next(err);
+    console.log("set timezone to UTC");
+    next(null, pool);
+  })
 }
 
 function startApi(err, dbPool) {
+  if (err) throw err;
   const app = express();
 
   app.use(logger('dev'));

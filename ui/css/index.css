@@ -13,3 +13,13 @@ span.device, span.duration {
 #dur-select > div {
     width: 6em;
 }
+.axis {
+    font: 10px sans-serif;
+}
+
+.axis path,
+.axis line {
+    fill: none;
+    stroke: #000;
+    shape-rendering: crispEdges;
+}
