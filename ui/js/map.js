@@ -237,8 +237,8 @@ function drawMap(duration, device_ip) {
 function updateDetailList(data) {
   const coord = window.iot_state.coord;
   const selectedLoc = window.iot_state.locs.filter(d => d.latitude === coord.lat && d.longitude === coord.lng)[0];
-  d3.select("#list-title").attr("colspan", "5").text(`Packets in last ${window.iot_state.duration} hour(s) for ${selectedLoc.city}, 
-    ${selectedLoc.state_province}, ${selectedLoc.country_code}`);
+  d3.select("#list-title").attr("colspan", "5").html(`Packets in last <span class="duration">${durDisplay(iot_state.duration)}</span> for <span class="device">${selectedLoc.city}, 
+    ${selectedLoc.state_province}, ${selectedLoc.country_code}</span>`);
   d3.select("#list-column").selectAll("th").remove();
   d3.select("#list-column").html("<th>Time</th><th>Protocol</th><th>Source</th><th>Destination</th><th>Size</th>");
 
