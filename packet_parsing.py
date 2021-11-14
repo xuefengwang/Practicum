@@ -313,10 +313,6 @@ def check_whitelist(pkt):
     db_conn.commit()
     db_cursor.close()
 
-<<<<<<< HEAD
-=======
-
->>>>>>> 7f06bd08ff67f9d0a9a15f37d19ab48f8938611c
 def process_pkt(pkt):
   try:
     db_pkt = parse_pkt(pkt)
@@ -324,10 +320,7 @@ def process_pkt(pkt):
       local_cache.add_packet(db_pkt)
       if db_pkt.protocol == 'DNS':
         add_dns(db_pkt)
-<<<<<<< HEAD
-=======
       # check if the dest_ip is in the whilelist
->>>>>>> 7f06bd08ff67f9d0a9a15f37d19ab48f8938611c
       if db_pkt.src_ip in device_cache:
         check_whitelist(db_pkt)
   except Exception as e:
