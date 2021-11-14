@@ -294,6 +294,24 @@ def add_dns(pkt):
     db_cursor.close()
 
 
+def check_whitelist(pkt):
+  db_cursor = db_conn.cursor()
+  select_stmt = (
+      "SELECT COUNT(*) total FROM device_whitelist "
+      "WHERE device_ip = %s AND dest_ip = %s"
+  )
+  db_cursor.execute(select_stmt, (pkt.src_ip, pkt.dst_ip))
+  total = db_cursor.fetchone()
+  if total[0] == 0:
+    log(f"Alert: device {pkt.src_ip} -> {pkt.dst_ip}")
+    insert_alert = (
+        "INSERT INTO alert (device_ip, message) VALUES (%s, %s)"
+    )
+    db_cursor.execute(
+        insert_alert, (pkt.src_ip, f"IoT device {pkt.src_ip} is trying to contact {pkt.dst_ip} which has not been vistied before."))
+    db_conn.commit()
+    db_cursor.close()
+
 def process_pkt(pkt):
   try:
     db_pkt = parse_pkt(pkt)
@@ -301,6 +319,8 @@ def process_pkt(pkt):
       local_cache.add_packet(db_pkt)
       if db_pkt.protocol == 'DNS':
         add_dns(db_pkt)
+      if db_pkt.src_ip in device_cache:
+        check_whitelist(db_pkt)
   except Exception as e:
     log(f"ERROR: {e}, packet: {pkt.summary()}")
     traceback.print_exc(file=log_file)
