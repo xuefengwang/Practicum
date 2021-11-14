@@ -30,6 +30,9 @@
                     <div class="column">
                         <div class="row" style="text-align: right;">
                             <div id="duration-list">
+                                <button id="alerts" class="ui basic negative button" style="margin-right: 60px;">
+                                    Alerts
+                                </button>
                                 <span>Duration: last </span>
                                 <button class="ui basic positive button fixed_button duration" value="60">1 hour</button>
                                 <button class="ui basic button fixed_button duration" value="360">6 hour</button>
@@ -107,6 +110,24 @@
     <div class="actions">
         <div class="ui black deny button">Cancel</div>
         <div id="edit-ok" class="ui positive right button">Okay</div>
+    </div>
+</div>
+<div id="alert-modal" class="ui modal">
+    <div class="header">Alerts (when device is contacting a server that it has not visited before)</div>
+    <div class="content">
+        <table class="ui celled striped table">
+            <thead>
+            <tr>
+                <th style="width: 35%;">Device IP</th>
+                <th>Message</th>
+            </tr>
+            </thead>
+            <tbody id="alert-body">
+            </tbody>
+        </table>
+    </div>
+    <div class="actions">
+        <div class="ui black deny button">Close</div>
     </div>
 </div>
 </body>

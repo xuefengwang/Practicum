@@ -61,13 +61,13 @@ router.get('/loc', (req, res, next) => {
   SELECT p.id, p.packet_time, p.protocol, p.src_ip, p.src_mac, p.dst_ip, p.dst_mac, p.size 
     FROM packet p JOIN 
     ( SELECT id FROM ip_coordinate WHERE latitude = ? AND longitude = ?) ic ON p.dst_ip_coord_id = ic.id 
-    WHERE p.packet_time > NOW() - INTERVAL ? HOUR AND p.protocol != 'ARP' ${deviceSql}
+    WHERE p.packet_time > NOW() - INTERVAL ? MINUTE AND p.protocol != 'ARP' ${deviceSql}
   UNION 
   SELECT p.id, p.packet_time, p.protocol, p.src_ip, p.src_mac, p.dst_ip, p.dst_mac, p.size
     FROM packet p JOIN 
     ( SELECT id FROM ip_coordinate WHERE latitude = ? AND longitude = ?) ic ON p.src_ip_coord_id = ic.id 
-    WHERE p.packet_time > NOW() - INTERVAL ? HOUR AND p.protocol != 'ARP' ${deviceSql}
-  ORDER BY id LIMIT 50;`, sqlParams, (err, results) => {
+    WHERE p.packet_time > NOW() - INTERVAL ? MINUTE AND p.protocol != 'ARP' ${deviceSql}
+  ORDER BY id;`, sqlParams, (err, results) => {
     if (err) return next(err);
 
     res.json({loc_packets: results});
@@ -98,6 +98,14 @@ router.post("/devices", (req, res, next) => {
 
     res.json({msg: "ok"});
   });
+});
+
+router.get("/alerts", (req, res, next) => {
+  req.db.query("SELECT DISTINCT device_ip, MESSAGE FROM alert ORDER BY id", (err, result) => {
+    if (err) return next(err);
+
+    res.json({alerts: result});
+  })
 });
 
 function getDuration(param) {

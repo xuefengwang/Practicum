@@ -92,7 +92,8 @@ def load_device_cache():
   db_cursor.execute(select_stmt)
   ips = db_cursor.fetchall()
   for ip in ips:
-    device_cache.append(ip[0])
+    if ip != '10.20.1.1':   # exclude AP
+      device_cache.append(ip[0])
   db_cursor.close()
   log(f"device ips {device_cache}")
 
@@ -319,6 +320,7 @@ def process_pkt(pkt):
       local_cache.add_packet(db_pkt)
       if db_pkt.protocol == 'DNS':
         add_dns(db_pkt)
+      # check if the dest_ip is in the whilelist
       if db_pkt.src_ip in device_cache:
         check_whitelist(db_pkt)
   except Exception as e:
@@ -335,4 +337,3 @@ try:
 except Exception as e:
   log(f"ERROR: {e}")
   traceback.print_exc(file=log_file)
-

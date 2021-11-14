@@ -92,6 +92,16 @@ function setupMap() {
   d3.json(API_SERVICE + "/dns", data => {
     window.iot_state.dns = data.dns;
   });
+
+  d3.json(API_SERVICE + "/alerts", data => {
+    window.iot_state.alerts = data.alerts;
+    d3.select("#alert-body")
+      .selectAll("tr")
+      .data(data.alerts)
+      .enter()
+      .append("tr")
+      .html(d => `<tr><td>${d.device_ip}</td><td>${d.MESSAGE}</td></tr>`)
+  });
 }
 
 function setup() {
@@ -107,7 +117,10 @@ function setup() {
     drawBarChart(duration, iot_state.device_ip);
   });
   $("#manage-device").on("click", e => {
-    $('.ui.modal').modal('show');
+    $('#device-edit').modal('show');
+  });
+  $("#alerts").on("click", e => {
+    $("#alert-modal").modal("show");
   });
   $("#edit-ok").on("click", e => {
     $("#device-input > tr").each((idx, element) => {
