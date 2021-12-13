@@ -313,6 +313,7 @@ def check_whitelist(pkt):
     db_conn.commit()
     db_cursor.close()
 
+
 def process_pkt(pkt):
   try:
     db_pkt = parse_pkt(pkt)
